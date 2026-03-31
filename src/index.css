@@ -7,3 +7,16 @@ body {
   background-color: #0f172a;
   color: #f1f5f9;
 }
+
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 30s linear infinite;
+}
+.ticker-track:hover {
+  animation-play-state: paused;
+}
