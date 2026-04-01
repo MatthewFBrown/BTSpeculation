@@ -97,7 +97,7 @@ export default function TickerTape({ onSendTo, accountId = 'default' }) {
         <div
           ref={popupRef}
           className="fixed z-50 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl p-1 min-w-[160px]"
-          style={{ top: popup.y, left: Math.min(popup.x, window.innerWidth - 180) }}
+          style={{ top: popup.y, left: Math.max(8, Math.min(popup.x, window.innerWidth - 188)) }}
         >
           <div className="px-3 py-1.5 text-xs font-bold text-slate-300 font-mono border-b border-slate-700 mb-1">
             {popup.sym}

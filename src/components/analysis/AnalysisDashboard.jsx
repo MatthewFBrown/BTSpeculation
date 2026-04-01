@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react'
-import SectorAnalysis from './SectorAnalysis'
-import PortfolioAnalysis from './PortfolioAnalysis'
 import EfficientFrontier from './EfficientFrontier'
 import RiskAnalysis from './RiskAnalysis'
 import Fundamentals from './Fundamentals'
@@ -11,8 +9,6 @@ import { fetchCorrelations } from '../../utils/fetchCorrelations'
 import { setRealCorrelations, setComputedParams } from '../../utils/efficientFrontier'
 
 const TABS = [
-  { id: 'portfolio',    label: 'Portfolio' },
-  { id: 'sector',       label: 'Sector' },
   { id: 'fundamentals', label: 'Fundamentals' },
   { id: 'financials',   label: 'Financials' },
   { id: 'research',     label: 'Research' },
@@ -22,7 +18,7 @@ const TABS = [
 ]
 
 export default function AnalysisDashboard({ investments, cash = 0, watchlistNav, onWatchlistNavConsumed, efParamsKey = 'bt_ef_params', efResearchParamsKey = 'bt_ef_research_params' }) {
-  const [tab, setTab] = useState('portfolio')
+  const [tab, setTab] = useState('fundamentals')
   const [researchSymbol,   setResearchSymbol]   = useState(null)
   const [financialsSymbol, setFinancialsSymbol] = useState(null)
   const [corrVersion, setCorrVersion]           = useState(0)
@@ -51,12 +47,12 @@ export default function AnalysisDashboard({ investments, cash = 0, watchlistNav,
 
   return (
     <div>
-      <div className="flex gap-1 mb-6 flex-wrap">
+      <div className="flex gap-1 mb-4 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               tab === t.id
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'
@@ -67,9 +63,7 @@ export default function AnalysisDashboard({ investments, cash = 0, watchlistNav,
         ))}
       </div>
 
-      {tab === 'portfolio'    && <PortfolioAnalysis investments={investments} cash={cash} />}
-      {tab === 'sector'       && <SectorAnalysis    investments={investments} />}
-      {tab === 'fundamentals' && <Fundamentals       investments={investments} />}
+      {tab === 'fundamentals' && <Fundamentals investments={investments} />}
       {tab === 'financials'   && <Financials         investments={investments} preloadSymbol={financialsSymbol} />}
       {tab === 'research'     && <Research           investments={investments} cash={cash} preloadSymbol={researchSymbol} efResearchParamsKey={efResearchParamsKey} />}
       {tab === 'dcf'          && <DCF                 investments={investments} />}

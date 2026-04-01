@@ -178,12 +178,18 @@ export default function App() {
   const efResearchParamsKey = accountKey('bt_ef_research_params', activeId)
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
+    <div className="min-h-screen bg-slate-900 text-slate-100 overflow-x-hidden">
       {/* Header */}
       <header className="border-b border-slate-700 bg-slate-800/60 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center gap-2 min-h-14">
-          <div className="flex items-center gap-2 mr-auto">
-            <span className="text-blue-400 font-bold text-lg tracking-tight">BT Speculation</span>
+        <div className="max-w-7xl mx-auto px-4">
+
+          {/* Top row: logo · account · watchlist · action buttons */}
+          <div className="flex items-center gap-2 py-2 min-h-12">
+            {/* Logo — abbreviated on small screens */}
+            <span className="text-blue-400 font-bold tracking-tight shrink-0">
+              <span className="sm:hidden text-base">BT</span>
+              <span className="hidden sm:inline text-lg">BT Speculation</span>
+            </span>
 
             {/* Account switcher */}
             <div className="relative" ref={acctDropRef}>
@@ -191,12 +197,12 @@ export default function App() {
                 onClick={() => { setShowAccounts(o => !o); setRenamingId(null); setShowNewAcc(false) }}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-slate-100 transition-colors border border-slate-600/50"
               >
-                {activeAccount.name}
-                <ChevronDown size={11} className="text-slate-500" />
+                <span className="max-w-[80px] sm:max-w-none truncate">{activeAccount.name}</span>
+                <ChevronDown size={11} className="text-slate-500 shrink-0" />
               </button>
 
               {showAccounts && (
-                <div className="absolute top-full left-0 mt-1.5 w-56 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-50 overflow-hidden">
+                <div className="absolute top-full left-0 mt-1.5 w-56 max-w-[calc(100vw-2rem)] bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-50 overflow-hidden">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider px-3 pt-2.5 pb-1 font-semibold">Accounts</p>
                   {accounts.map(acc => (
                     <div key={acc.id}
@@ -230,7 +236,6 @@ export default function App() {
                       )}
                     </div>
                   ))}
-
                   <div className="border-t border-slate-700 mt-1 p-2">
                     {showNewAcc ? (
                       <form onSubmit={e => { e.preventDefault(); handleCreateAccount() }} className="flex gap-1">
@@ -250,17 +255,14 @@ export default function App() {
               )}
             </div>
 
+            {/* Watchlist */}
             <button onClick={openWatchlistModal} title="Watchlist"
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors">
+              className="flex items-center px-2 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors">
               <Eye size={14} />
             </button>
 
-            {/* Section tabs */}
-            <div className="flex bg-slate-700/60 rounded-lg p-0.5 gap-0.5 ml-1">
-              <button onClick={() => setSection('trading')}
-                className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${section === 'trading' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
-                Day Trading
-              </button>
+            {/* Section tabs — pill style, desktop only */}
+            <div className="hidden sm:flex bg-slate-700/60 rounded-lg p-0.5 gap-0.5 ml-1">
               <button onClick={() => setSection('investments')}
                 className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors ${section === 'investments' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
                 <TrendingUp size={12} /> Investments
@@ -269,76 +271,107 @@ export default function App() {
                 className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors ${section === 'analysis' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
                 <LineChart size={12} /> Analyse
               </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {section === 'trading' && (
-              <>
-                <div className="flex bg-slate-700 rounded-lg p-0.5 gap-0.5">
-                  <button onClick={() => setView('trades')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${view === 'trades' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
-                    <List size={13} /> Trades
-                  </button>
-                  <button onClick={() => setView('charts')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${view === 'charts' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
-                    <BarChart2 size={13} /> Charts
-                  </button>
-                </div>
-                {trades.length === 0 && (
-                  <button onClick={loadDemoData}
-                    className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                    <FlaskConical size={15} /> Demo Data
-                  </button>
-                )}
-                <button onClick={() => setShowForm(true)}
-                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                  <Plus size={15} /> Add Trade
-                </button>
-              </>
-            )}
-
-            {section === 'analysis' && (
-              <button onClick={() => setShowApiKey(true)} title="API Keys"
-                className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                <KeyRound size={14} />
+              <button onClick={() => setSection('trading')}
+                className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${section === 'trading' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
+                Day Trading
               </button>
-            )}
+            </div>
 
-            {section === 'investments' && (
-              <>
-                <div className="flex bg-slate-700 rounded-lg p-0.5 gap-0.5">
-                  <button onClick={() => setInvView('positions')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${invView === 'positions' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
-                    <List size={13} /> Positions
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Context action buttons */}
+            <div className="flex items-center gap-1.5">
+              {section === 'trading' && (
+                <>
+                  <div className="flex bg-slate-700 rounded-lg p-0.5 gap-0.5">
+                    <button onClick={() => setView('trades')}
+                      className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded text-xs font-medium transition-colors ${view === 'trades' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
+                      <List size={13} /> <span className="hidden sm:inline">Trades</span>
+                    </button>
+                    <button onClick={() => setView('charts')}
+                      className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded text-xs font-medium transition-colors ${view === 'charts' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
+                      <BarChart2 size={13} /> <span className="hidden sm:inline">Charts</span>
+                    </button>
+                  </div>
+                  {trades.length === 0 && (
+                    <button onClick={loadDemoData}
+                      className="hidden sm:flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
+                      <FlaskConical size={15} /> Demo Data
+                    </button>
+                  )}
+                  <button onClick={() => setShowForm(true)}
+                    className="flex items-center gap-1 sm:gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
+                    <Plus size={15} /> <span className="hidden sm:inline">Add Trade</span>
                   </button>
-                  <button onClick={() => setInvView('charts')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${invView === 'charts' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
-                    <BarChart2 size={13} /> Charts
-                  </button>
-                </div>
-                {investments.length === 0 && (
-                  <button onClick={loadDemoInvestments}
-                    className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                    <FlaskConical size={15} /> Demo Data
-                  </button>
-                )}
-                <button onClick={() => setShowApiKey(true)} title="Finnhub API key"
+                </>
+              )}
+
+              {section === 'analysis' && (
+                <button onClick={() => setShowApiKey(true)} title="API Keys"
                   className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors">
                   <KeyRound size={14} />
                 </button>
-                <button onClick={handleRefreshPrices} disabled={refreshing}
-                  className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-300 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                  <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                  {refreshing ? 'Refreshing…' : 'Refresh Prices'}
-                </button>
-                <button onClick={() => setShowInvForm(true)}
-                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                  <Plus size={15} /> Add Position
-                </button>
-              </>
-            )}
+              )}
+
+              {section === 'investments' && (
+                <>
+                  <div className="flex bg-slate-700 rounded-lg p-0.5 gap-0.5">
+                    <button onClick={() => setInvView('positions')}
+                      className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded text-xs font-medium transition-colors ${invView === 'positions' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
+                      <List size={13} /> <span className="hidden sm:inline">Positions</span>
+                    </button>
+                    <button onClick={() => setInvView('charts')}
+                      className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded text-xs font-medium transition-colors ${invView === 'charts' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
+                      <BarChart2 size={13} /> <span className="hidden sm:inline">Charts</span>
+                    </button>
+                  </div>
+                  {investments.length === 0 && (
+                    <button onClick={loadDemoInvestments}
+                      className="hidden sm:flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
+                      <FlaskConical size={15} /> Demo Data
+                    </button>
+                  )}
+                  <button onClick={() => setShowApiKey(true)} title="Finnhub API key"
+                    className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1.5 rounded-lg text-sm font-medium transition-colors">
+                    <KeyRound size={14} />
+                  </button>
+                  <button onClick={handleRefreshPrices} disabled={refreshing}
+                    className="flex items-center gap-1 sm:gap-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-300 px-2 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
+                    <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                    <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : 'Refresh Prices'}</span>
+                  </button>
+                  <button onClick={() => setShowInvForm(true)}
+                    className="flex items-center gap-1 sm:gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
+                    <Plus size={15} /> <span className="hidden sm:inline">Add Position</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+
+          {/* Bottom row: section tabs — full width, mobile only */}
+          <div className="sm:hidden flex -mx-4">
+            <button onClick={() => setSection('investments')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium border-b-2 transition-colors ${
+                section === 'investments' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600'
+              }`}>
+              <TrendingUp size={12} /> Investments
+            </button>
+            <button onClick={() => setSection('analysis')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium border-b-2 transition-colors ${
+                section === 'analysis' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600'
+              }`}>
+              <LineChart size={12} /> Analyse
+            </button>
+            <button onClick={() => setSection('trading')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium border-b-2 transition-colors ${
+                section === 'trading' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600'
+              }`}>
+              Day Trading
+            </button>
+          </div>
+
         </div>
       </header>
 
@@ -349,7 +382,7 @@ export default function App() {
       }} />
 
       {/* Main */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
         {section === 'trading' && (
           <>
             <Dashboard trades={trades} />

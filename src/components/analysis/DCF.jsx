@@ -145,8 +145,51 @@ function SensitivityTable({ baseFCF, growthRate, terminalRate, sharesOutstanding
   )
 }
 
+// ── Parse shorthand like "10B", "1.5M", "500K" ───────────────
+function parseBig(str) {
+  if (str == null) return null
+  const s = String(str).trim().replace(/,/g, '')
+  if (s === '' || s === '-') return null
+  const neg = s.startsWith('-')
+  const abs = neg ? s.slice(1) : s
+  const m = abs.match(/^([\d.]+)\s*([kmbt]?)$/i)
+  if (!m) return null
+  let n = parseFloat(m[1])
+  if (isNaN(n)) return null
+  const suffix = m[2].toLowerCase()
+  if (suffix === 'k') n *= 1e3
+  else if (suffix === 'm') n *= 1e6
+  else if (suffix === 'b') n *= 1e9
+  else if (suffix === 't') n *= 1e12
+  return neg ? -n : n
+}
+
+// ── Editable big-number input (supports 10B, 1.5M, etc.) ─────
+function BigInput({ value, onChange, placeholder, className = '' }) {
+  const [raw, setRaw] = useState('')
+  const [focused, setFocused] = useState(false)
+  const display = focused ? raw : (value != null ? fmtB(value).replace('$', '') : '')
+  return (
+    <input
+      type="text"
+      value={display}
+      placeholder={placeholder}
+      onChange={e => setRaw(e.target.value)}
+      onFocus={() => { setRaw(value != null ? String(value) : ''); setFocused(true) }}
+      onBlur={() => {
+        setFocused(false)
+        const parsed = parseBig(raw)
+        if (parsed !== null) onChange(parsed)
+      }}
+      className={`bg-slate-700 border border-slate-600 rounded px-2 py-0.5 text-xs text-slate-100 text-right focus:outline-none focus:border-blue-500 tabular-nums ${className}`}
+    />
+  )
+}
+
 // ── Slider row ────────────────────────────────────────────────
 function SliderRow({ label, value, min, max, step = 0.5, onChange, color = 'accent-blue-500', unit = '%', note, tip }) {
+  const [raw, setRaw] = useState('')
+  const [focused, setFocused] = useState(false)
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
@@ -155,9 +198,18 @@ function SliderRow({ label, value, min, max, step = 0.5, onChange, color = 'acce
           {tip && <Tip text={tip} />}
         </span>
         <div className="flex items-center gap-1">
-          <input type="number" value={value} min={min} max={max} step={step}
-            onChange={e => onChange(Math.max(min, Math.min(max, parseFloat(e.target.value) || 0)))}
-            className="w-16 bg-slate-700 border border-slate-600 rounded px-2 py-0.5 text-xs text-slate-100 text-right focus:outline-none focus:border-blue-500 tabular-nums" />
+          <input
+            type="text"
+            value={focused ? raw : String(value)}
+            onChange={e => setRaw(e.target.value)}
+            onFocus={() => { setRaw(String(value)); setFocused(true) }}
+            onBlur={() => {
+              setFocused(false)
+              const n = parseFloat(raw)
+              if (!isNaN(n)) onChange(Math.max(min, Math.min(max, n)))
+            }}
+            className="w-16 bg-slate-700 border border-slate-600 rounded px-2 py-0.5 text-xs text-slate-100 text-right focus:outline-none focus:border-blue-500 tabular-nums"
+          />
           <span className="text-slate-500 text-xs">{unit}</span>
         </div>
       </div>
@@ -183,6 +235,8 @@ export default function DCF({ investments }) {
   const [discountRate,       setDiscountRate]        = useState(10)
   const [sharesInput,        setSharesInput]         = useState(null)
   const [currentPriceInput,  setCurrentPriceInput]   = useState(null)
+  const [baseFCFOverride,    setBaseFCFOverride]     = useState(null)
+  const [netCashOverride,    setNetCashOverride]     = useState(null)
 
   async function loadSymbol(sym) {
     const s = sym.trim().toUpperCase()
@@ -234,6 +288,7 @@ export default function DCF({ investments }) {
     if (derived?.impliedGrowth != null)
       setGrowthRate(Math.max(-30, Math.min(60, parseFloat(derived.impliedGrowth.toFixed(1)))))
     setSharesInput(null); setCurrentPriceInput(null)
+    setBaseFCFOverride(null); setNetCashOverride(null)
   }, [symbol])
 
   const effectivePrice = currentPriceInput ?? derived?.currentPrice ?? null
@@ -245,11 +300,13 @@ export default function DCF({ investments }) {
     : fundamentalsCache[symbol]?.profile?.shareOutstanding
       ? fundamentalsCache[symbol].profile.shareOutstanding * 1e6 : null
   const effectiveShares = sharesInput ?? sharesFromFundamentals ?? null
+  const effectiveBaseFCF = baseFCFOverride ?? derived?.baseFCF ?? null
+  const effectiveNetCash = netCashOverride ?? derived?.netCash ?? 0
 
   const dcfResult = useMemo(() => {
-    if (!derived?.baseFCF || !effectiveShares) return null
-    return runDCF({ baseFCF: derived.baseFCF, growthRate, terminalRate, discountRate, sharesOutstanding: effectiveShares, netCash: derived.netCash })
-  }, [derived, growthRate, terminalRate, discountRate, effectiveShares])
+    if (!effectiveBaseFCF || !effectiveShares) return null
+    return runDCF({ baseFCF: effectiveBaseFCF, growthRate, terminalRate, discountRate, sharesOutstanding: effectiveShares, netCash: effectiveNetCash })
+  }, [effectiveBaseFCF, effectiveNetCash, growthRate, terminalRate, discountRate, effectiveShares])
 
   const marginOfSafety = dcfResult && effectivePrice
     ? ((dcfResult.intrinsicValue - effectivePrice) / effectivePrice) * 100 : null
@@ -412,21 +469,7 @@ export default function DCF({ investments }) {
       {/* ── Main content ─────────────────────────────────────── */}
       {data && derived && (
         <>
-          {!effectiveShares && (
-            <div className="bg-slate-800 border border-yellow-500/30 rounded-xl p-4 flex items-center gap-4 flex-wrap">
-              <AlertTriangle size={15} className="text-yellow-400 shrink-0" />
-              <p className="text-xs text-yellow-200/80 flex-1">
-                Shares outstanding not found. Open this ticker in the <strong>Fundamentals tab</strong> first to auto-populate, or enter manually below.
-                <Tip text="Shares outstanding = total number of shares issued by the company. Used to convert total equity value into a per-share price. Find it on any financial data site." />
-              </p>
-              <div className="flex items-center gap-2">
-                <input type="number" min="1" placeholder="e.g. 15000000000"
-                  onChange={e => setSharesInput(parseFloat(e.target.value) || null)}
-                  className="w-44 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-blue-500 placeholder:text-slate-600" />
-                <span className="text-xs text-slate-500">shares</span>
-              </div>
-            </div>
-          )}
+
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
@@ -437,32 +480,43 @@ export default function DCF({ investments }) {
                 <p className="text-[10px] text-slate-600 mt-0.5">Auto-populated from financial statements. Adjust to reflect your outlook.</p>
               </div>
 
-              {/* Fixed inputs */}
-              <div className="space-y-2 text-xs border-b border-slate-700 pb-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 flex items-center">
+              {/* Editable inputs */}
+              <div className="space-y-2.5 text-xs border-b border-slate-700 pb-4">
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-slate-500 flex items-center shrink-0">
                     Base FCF (3yr avg)
-                    <Tip text="Free Cash Flow = Operating Cash Flow minus Capital Expenditures. We average the last 3 years to smooth out one-time items. This is the starting point for all projections." />
+                    <Tip text="Free Cash Flow = Operating Cash Flow minus Capital Expenditures. We average the last 3 years to smooth out one-time items. Override if you want to use a different figure. Supports shorthand: 10B, 1.5M, 500K." />
                   </span>
-                  <span className="font-medium text-slate-200 tabular-nums">{fmtB(derived.baseFCF)}</span>
+                  <BigInput
+                    value={effectiveBaseFCF}
+                    onChange={setBaseFCFOverride}
+                    placeholder="e.g. 10B"
+                    className="w-24"
+                  />
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 flex items-center">
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-slate-500 flex items-center shrink-0">
                     Net Cash / Debt
-                    <Tip text="Cash & short-term investments minus long-term debt. Positive = net cash (adds to value). Negative = net debt (subtracts). A cash-rich company is worth more per share." />
+                    <Tip text="Cash & short-term investments minus long-term debt. Positive = net cash (adds to value). Negative = net debt (subtracts). Use negative numbers for net debt. Supports shorthand: -5B, 2.3B." />
                   </span>
-                  <span className={`font-medium tabular-nums ${derived.netCash >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {derived.netCash >= 0 ? '+' : ''}{fmtB(derived.netCash)}
-                  </span>
+                  <BigInput
+                    value={effectiveNetCash}
+                    onChange={setNetCashOverride}
+                    placeholder="e.g. 2B or -5B"
+                    className="w-24"
+                  />
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 flex items-center">
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-slate-500 flex items-center shrink-0">
                     Shares Outstanding
-                    <Tip text="Total shares issued by the company. The total equity value is divided by this number to get the per-share intrinsic value." />
+                    <Tip text="Total shares issued by the company. Divide total equity value by this to get per-share price. Supports shorthand: 7.4B, 500M." />
                   </span>
-                  <span className="font-medium text-slate-200 tabular-nums">
-                    {effectiveShares ? fmtB(effectiveShares).replace('$', '') : <span className="text-yellow-400">missing</span>}
-                  </span>
+                  <BigInput
+                    value={effectiveShares}
+                    onChange={setSharesInput}
+                    placeholder={effectiveShares ? undefined : 'e.g. 7.4B'}
+                    className={`w-24 ${!effectiveShares ? 'border-yellow-500/60' : ''}`}
+                  />
                 </div>
                 {derived.impliedGrowth != null && (
                   <div className="flex justify-between items-center">
@@ -472,6 +526,9 @@ export default function DCF({ investments }) {
                     </span>
                     <span className="font-medium text-blue-400 tabular-nums">{fmtPct(derived.impliedGrowth)}</span>
                   </div>
+                )}
+                {!effectiveShares && (
+                  <p className="text-[10px] text-yellow-500/70">Enter shares outstanding above, or open this ticker in the Fundamentals tab to auto-populate.</p>
                 )}
               </div>
 
@@ -499,21 +556,22 @@ export default function DCF({ investments }) {
 
               {/* Current price */}
               <div className="space-y-2 border-t border-slate-700 pt-3">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500 flex items-center">
+                <div className="flex justify-between items-center text-xs gap-2">
+                  <span className="text-slate-500 flex items-center shrink-0">
                     Current Price
                     <Tip text="Used to calculate margin of safety. Auto-filled from your portfolio if this ticker is an open position. You can override it." />
                   </span>
                   <div className="flex items-center gap-1">
-                    <input type="number" step="0.01"
-                      value={currentPriceInput ?? effectivePrice ?? ''}
+                    <BigInput
+                      value={effectivePrice}
+                      onChange={setCurrentPriceInput}
                       placeholder="e.g. 420.00"
-                      onChange={e => setCurrentPriceInput(parseFloat(e.target.value) || null)}
-                      className="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-0.5 text-xs text-slate-100 text-right focus:outline-none focus:border-blue-500 placeholder:text-slate-600" />
+                      className="w-20"
+                    />
                     <span className="text-slate-500">$</span>
                   </div>
                 </div>
-                {!effectivePrice && !currentPriceInput && (
+                {!effectivePrice && (
                   <p className="text-[10px] text-slate-600">Enter a price to see margin of safety</p>
                 )}
               </div>
@@ -704,11 +762,11 @@ export default function DCF({ investments }) {
           {/* ── Sensitivity table ─────────────────────────────── */}
           {dcfResult && (
             <SensitivityTable
-              baseFCF={derived.baseFCF}
+              baseFCF={effectiveBaseFCF}
               growthRate={growthRate}
               terminalRate={terminalRate}
               sharesOutstanding={effectiveShares}
-              netCash={derived.netCash}
+              netCash={effectiveNetCash}
               currentPrice={effectivePrice}
             />
           )}

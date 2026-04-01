@@ -5,32 +5,32 @@ import { Pencil, Check } from 'lucide-react'
 function Hero({ s, cash, totalPortfolio }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-slate-700 rounded-xl overflow-hidden border border-slate-700 mb-4">
-      <div className="bg-slate-800 p-5">
+      <div className="bg-slate-800 p-3 sm:p-5">
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">Total Portfolio</p>
-        <p className="text-2xl sm:text-4xl font-bold tabular-nums tracking-tight text-slate-100">{fmtInv(totalPortfolio)}</p>
+        <p className="text-xl sm:text-3xl font-bold tabular-nums tracking-tight text-slate-100">{fmtInv(totalPortfolio)}</p>
         <p className="text-xs text-slate-500 mt-2">
           Equities {fmtInv(s.totalCurrentValue)} · Cash {fmtInv(cash)}
         </p>
       </div>
-      <div className="bg-slate-800 p-5">
+      <div className="bg-slate-800 p-3 sm:p-5">
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">Unrealized P&L</p>
-        <p className={`text-2xl sm:text-4xl font-bold tabular-nums tracking-tight ${s.totalUnrealized >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+        <p className={`text-xl sm:text-3xl font-bold tabular-nums tracking-tight ${s.totalUnrealized >= 0 ? 'text-green-400' : 'text-red-400'}`}>
           {fmtInv(s.totalUnrealized)}
         </p>
         <p className={`text-xs mt-2 ${s.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'}`}>
           {fmtPct(s.totalReturn)} on open positions
         </p>
       </div>
-      <div className="bg-slate-800 p-5">
+      <div className="bg-slate-800 p-3 sm:p-5">
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">Realized P&L</p>
-        <p className={`text-2xl sm:text-4xl font-bold tabular-nums tracking-tight ${s.totalRealized >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+        <p className={`text-xl sm:text-3xl font-bold tabular-nums tracking-tight ${s.totalRealized >= 0 ? 'text-green-400' : 'text-red-400'}`}>
           {fmtInv(s.totalRealized)}
         </p>
         <p className="text-xs text-slate-500 mt-2">{s.closedCount} closed position{s.closedCount !== 1 ? 's' : ''}</p>
       </div>
-      <div className="bg-slate-800 p-5">
+      <div className="bg-slate-800 p-3 sm:p-5">
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">Total P&L</p>
-        <p className={`text-2xl sm:text-4xl font-bold tabular-nums tracking-tight ${s.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+        <p className={`text-xl sm:text-3xl font-bold tabular-nums tracking-tight ${s.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
           {fmtInv(s.totalPnL)}
         </p>
         <p className="text-xs text-slate-500 mt-2">unrealized + realized</p>
@@ -54,10 +54,10 @@ function MetricRow({ label, value, color = 'text-slate-200', sub }) {
 function MetricGroup({ title, accent, children, hidden = false }) {
   return (
     <div className={`bg-slate-800 rounded-xl border border-slate-700 border-t-2 ${accent} overflow-hidden ${hidden ? 'hidden md:block' : ''}`}>
-      <div className="px-4 pt-4 pb-1">
+      <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-1">
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1">{title}</p>
       </div>
-      <div className="px-4 pb-3">{children}</div>
+      <div className="px-3 sm:px-4 pb-3">{children}</div>
     </div>
   )
 }
@@ -80,10 +80,10 @@ export default function InvestmentDashboard({ investments, cash = 0, onCashUpdat
       <Hero s={s} cash={cash} totalPortfolio={totalPortfolio} />
 
       {/* Mobile tab switcher */}
-      <div className="flex md:hidden gap-2">
+      <div className="flex md:hidden gap-1.5">
         {INV_TABS.map((t, i) => (
           <button key={t} onClick={() => setActiveTab(i)}
-            className={`flex-1 py-1.5 rounded text-xs font-medium ${activeTab === i ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+            className={`flex-1 py-2 rounded text-[11px] font-medium leading-tight ${activeTab === i ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
             {t}
           </button>
         ))}
