@@ -1,36 +1,44 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { accountKey } from './useAccounts'
 
-const STORAGE_KEY = 'bt_speculation_trades'
+const BASE_KEY = 'bt_speculation_trades'
 
-export function useTrades() {
-  const [trades, setTrades] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      return stored ? JSON.parse(stored) : []
-    } catch {
-      return []
-    }
+export function useTrades(accountId = 'default') {
+  const storageKey = accountKey(BASE_KEY, accountId)
+
+  const [trades, setTradesRaw] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey) || '[]') } catch { return [] }
   })
 
+  const keyRef = useRef(storageKey)
+
+  // When account switches, load from new key
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trades))
+    if (keyRef.current === storageKey) return
+    keyRef.current = storageKey
+    try { setTradesRaw(JSON.parse(localStorage.getItem(storageKey) || '[]')) }
+    catch { setTradesRaw([]) }
+  }, [storageKey])
+
+  // Save on every change
+  useEffect(() => {
+    localStorage.setItem(keyRef.current, JSON.stringify(trades))
   }, [trades])
 
   function addTrade(trade) {
-    const record = { id: crypto.randomUUID(), createdAt: new Date().toISOString(), ...trade }
-    setTrades(prev => [record, ...prev])
-  }
-
-  function loadTrades(list) {
-    setTrades(list)
+    setTradesRaw(prev => [{ id: crypto.randomUUID(), createdAt: new Date().toISOString(), ...trade }, ...prev])
   }
 
   function updateTrade(id, updates) {
-    setTrades(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t))
+    setTradesRaw(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t))
   }
 
   function deleteTrade(id) {
-    setTrades(prev => prev.filter(t => t.id !== id))
+    setTradesRaw(prev => prev.filter(t => t.id !== id))
+  }
+
+  function loadTrades(list) {
+    setTradesRaw(list)
   }
 
   return { trades, addTrade, updateTrade, deleteTrade, loadTrades }

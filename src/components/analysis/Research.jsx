@@ -1,7 +1,10 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { fetchFundamentals } from '../../utils/fetchFundamentals'
 import { fmtInv } from '../../utils/investmentCalcs'
-import { Search, X, RefreshCw, KeyRound, AlertTriangle, LayoutList, Columns, ExternalLink } from 'lucide-react'
+import { Search, X, RefreshCw, KeyRound, AlertTriangle, LayoutList, Columns, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { getCorrelationMatrixForSymbols, setRealCorrelations, setComputedParams } from '../../utils/efficientFrontier'
+import { fetchCorrelations } from '../../utils/fetchCorrelations'
+import FrontierPanel from './FrontierPanel'
 
 // ── Formatters ────────────────────────────────────────────────
 const fmt  = (v, suffix = '', dec = 2) => v == null || isNaN(v) ? '—' : `${Number(v).toFixed(dec)}${suffix}`
@@ -312,8 +315,159 @@ function CompareView({ symbols, dataMap }) {
   )
 }
 
+// ── Correlation heatmap ───────────────────────────────────────
+function corrColor(v) {
+  if (v >= 0.7)  return 'bg-red-500/80 text-white'
+  if (v >= 0.4)  return 'bg-orange-500/60 text-white'
+  if (v >= 0.15) return 'bg-yellow-500/40 text-slate-200'
+  if (v >= -0.05) return 'bg-slate-600/60 text-slate-300'
+  return 'bg-blue-500/50 text-white'
+}
+
+function CorrelationHeatmap({ portSymbols, researchSymbols, corrVersion = 0 }) {
+  const allSymbols = [...portSymbols, ...researchSymbols]
+  const { matrix } = useMemo(() => getCorrelationMatrixForSymbols(allSymbols), [allSymbols.join(','), corrVersion])  // eslint-disable-line
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="text-xs border-collapse mx-auto">
+        <thead>
+          <tr>
+            <th className="w-12 h-8" />
+            {allSymbols.map(sym => (
+              <th key={sym} className="px-1 pb-2 font-mono font-bold text-center">
+                <span className={researchSymbols.includes(sym) ? 'text-violet-400' : 'text-blue-400'}>{sym}</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {allSymbols.map((row, i) => (
+            <tr key={row}>
+              <td className="pr-2 py-0.5 font-mono font-bold text-right">
+                <span className={researchSymbols.includes(row) ? 'text-violet-400' : 'text-blue-400'}>{row}</span>
+              </td>
+              {matrix[i].map((val, j) => (
+                <td key={j} className={`w-10 h-8 text-center font-semibold tabular-nums rounded-sm mx-px ${corrColor(val)}`}>
+                  {val.toFixed(2)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 justify-center mt-3 text-[10px]">
+        {[
+          ['bg-blue-500/50', '< 0 (negative)'],
+          ['bg-slate-600/60', '0–0.15 (uncorrelated)'],
+          ['bg-yellow-500/40', '0.15–0.4 (low)'],
+          ['bg-orange-500/60', '0.4–0.7 (moderate)'],
+          ['bg-red-500/80', '> 0.7 (high)'],
+        ].map(([cls, label]) => (
+          <div key={label} className="flex items-center gap-1.5">
+            <span className={`w-3 h-3 rounded-sm ${cls}`} />
+            <span className="text-slate-500">{label}</span>
+          </div>
+        ))}
+        <div className="flex items-center gap-1.5">
+          <span className="text-blue-400 font-bold font-mono">AAPL</span>
+          <span className="text-slate-500">= portfolio</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-violet-400 font-bold font-mono">COIN</span>
+          <span className="text-slate-500">= researched</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+// ── Portfolio context panel ───────────────────────────────────
+function PortfolioContext({ investments, loadedSymbols, dataMap, cash = 0, efResearchParamsKey = 'bt_ef_research_params' }) {
+  const [open, setOpen]         = useState(true)
+  const [subTab, setSubTab]     = useState('correlation')
+  const [corrVersion, setCorrVersion] = useState(0)
+
+  const openInv     = investments.filter(i => i.status === 'open')
+  const portSymbols = openInv.map(i => i.symbol)
+  const researchSymbols = loadedSymbols.filter(s => !portSymbols.includes(s))
+  const allSymbols  = [...portSymbols, ...researchSymbols]
+
+  // Fetch real correlations — increment corrVersion after so useMemos recompute
+  useEffect(() => {
+    if (allSymbols.length < 2) return
+    fetchCorrelations(allSymbols).then(({ corrMap, paramsMap }) => {
+      if (Object.keys(corrMap).length > 0) {
+        setRealCorrelations(corrMap)
+        setComputedParams(paramsMap)
+        setCorrVersion(v => v + 1)
+      }
+    })
+  }, [allSymbols.join(',')])  // eslint-disable-line
+
+  // Build priceMap from loaded quote data for symbols not in portfolio
+  const priceMap = useMemo(() => {
+    const map = {}
+    for (const sym of researchSymbols) {
+      const q = dataMap[sym]?.quote?.c
+      if (q) map[sym] = q
+    }
+    return map
+  }, [researchSymbols.join(','), dataMap])  // eslint-disable-line
+
+  if (openInv.length === 0) return null
+
+  return (
+    <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-700/30 transition-colors"
+      >
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400 text-left">Portfolio Context</p>
+          <p className="text-xs text-slate-600 text-left mt-0.5">
+            How researched stocks relate to your {portSymbols.length} current holdings
+          </p>
+        </div>
+        {open ? <ChevronUp size={15} className="text-slate-500" /> : <ChevronDown size={15} className="text-slate-500" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-700 p-4">
+          {/* Sub-tab toggle */}
+          <div className="flex bg-slate-700 rounded-lg p-0.5 gap-0.5 w-fit mb-4">
+            {[['correlation','Correlation Matrix'],['frontier','Efficient Frontier']].map(([id, label]) => (
+              <button key={id} onClick={() => setSubTab(id)}
+                className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                  subTab === id ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {subTab === 'correlation' && (
+            <CorrelationHeatmap
+              portSymbols={portSymbols}
+              researchSymbols={researchSymbols.length > 0 ? researchSymbols : loadedSymbols}
+              corrVersion={corrVersion}
+            />
+          )}
+
+          {subTab === 'frontier' && (
+            researchSymbols.length === 0
+              ? <p className="text-slate-500 text-sm text-center py-8">Load at least one stock not already in your portfolio to see the combined frontier.</p>
+              : <FrontierPanel investments={investments} extraSymbols={researchSymbols} storageKey={efResearchParamsKey} priceMap={priceMap} cash={cash} />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Component ────────────────────────────────────────────
-export default function Research({ preloadSymbol }) {
+export default function Research({ preloadSymbol, investments = [], cash = 0, efResearchParamsKey = 'bt_ef_research_params' }) {
   const [input, setInput]       = useState('')
   const [symbols, setSymbols]   = useState([])
   const [dataMap, setDataMap]   = useState({})
@@ -480,6 +634,11 @@ export default function Research({ preloadSymbol }) {
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
           <CompareView symbols={symbols} dataMap={dataMap} />
         </div>
+      )}
+
+      {/* Portfolio context — correlation + combined EF */}
+      {symbols.length > 0 && investments.length > 0 && (
+        <PortfolioContext investments={investments} loadedSymbols={symbols} dataMap={dataMap} cash={cash} efResearchParamsKey={efResearchParamsKey} />
       )}
     </div>
   )

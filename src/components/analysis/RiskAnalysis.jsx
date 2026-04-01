@@ -255,7 +255,7 @@ function RiskContribution({ investments }) {
 }
 
 // ── Correlation Matrix ────────────────────────────────────────
-function CorrelationMatrix({ investments }) {
+function CorrelationMatrix({ investments, corrVersion }) {  // eslint-disable-line no-unused-vars
   const { symbols, matrix } = getCorrelationMatrix(investments)
   const [info, setInfo] = useState(false)
   if (!symbols.length) return null
@@ -357,7 +357,7 @@ function CorrelationMatrix({ investments }) {
 }
 
 // ── Main Component ────────────────────────────────────────────
-export default function RiskAnalysis({ investments, cash = 0 }) {
+export default function RiskAnalysis({ investments, cash = 0, corrVersion = 0 }) {
   const m = getPortfolioRiskMetrics(investments)
   const totalPortfolio = m ? m.totalMV + cash : cash
   const [heroInfo, setHeroInfo]  = useState(false)
@@ -546,7 +546,7 @@ export default function RiskAnalysis({ investments, cash = 0 }) {
       <RiskContribution investments={investments} />
 
       {/* Correlation Matrix */}
-      <CorrelationMatrix investments={investments} />
+      <CorrelationMatrix investments={investments} corrVersion={corrVersion} />
 
       <p className="text-xs text-slate-600 text-center">
         All metrics use estimated historical parameters. Not financial advice.

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTrades } from './hooks/useTrades'
 import { useInvestments } from './hooks/useInvestments'
+import { useAccounts, accountKey } from './hooks/useAccounts'
 import Dashboard from './components/Dashboard'
 import TradeForm from './components/TradeForm'
 import TradeTable from './components/TradeTable'
@@ -10,129 +11,129 @@ import InvestmentTable from './components/investments/InvestmentTable'
 import InvestmentCharts from './components/investments/InvestmentCharts'
 import InvestmentForm from './components/investments/InvestmentForm'
 import AnalysisDashboard from './components/analysis/AnalysisDashboard'
-import { Plus, BarChart2, List, FlaskConical, TrendingUp, LineChart, RefreshCw, KeyRound, X, Eye } from 'lucide-react'
+import { Plus, BarChart2, List, FlaskConical, TrendingUp, LineChart, RefreshCw, KeyRound, X, Eye, ChevronDown, Pencil, Trash2, Check } from 'lucide-react'
 import TickerTape, { openWatchlistModal } from './components/TickerTape'
 import { SEED_TRADES } from './utils/seedData'
 import { SEED_INVESTMENTS } from './utils/seedInvestments'
 import { fetchAllPrices } from './utils/fetchPrices'
 
 export default function App() {
-  const { trades, addTrade, updateTrade, deleteTrade, loadTrades } = useTrades()
-  const { investments, addInvestment, updateInvestment, deleteInvestment, loadInvestments } = useInvestments()
+  const { accounts, activeAccount, activeId, createAccount, renameAccount, deleteAccount, switchTo } = useAccounts()
+  const { trades, addTrade, updateTrade, deleteTrade, loadTrades }             = useTrades(activeId)
+  const { investments, addInvestment, updateInvestment, deleteInvestment, loadInvestments } = useInvestments(activeId)
 
-  const [section, setSection] = useState('trading')   // 'trading' | 'investments' | 'analysis'
-  const [watchlistNav, setWatchlistNav] = useState(null)  // { dest, sym }
-  const [view, setView] = useState('trades')           // 'trades' | 'charts'
-  const [invView, setInvView] = useState('positions')  // 'positions' | 'charts'
+  const [section, setSection]         = useState('trading')
+  const [watchlistNav, setWatchlistNav] = useState(null)
+  const [view, setView]               = useState('trades')
+  const [invView, setInvView]         = useState('positions')
 
-  const [showForm, setShowForm] = useState(false)
-  const [editTrade, setEditTrade] = useState(null)
+  const [showForm, setShowForm]       = useState(false)
+  const [editTrade, setEditTrade]     = useState(null)
 
   const [showInvForm, setShowInvForm] = useState(false)
-  const [editInv, setEditInv] = useState(null)
+  const [editInv, setEditInv]         = useState(null)
   const [updatePriceInv, setUpdatePriceInv] = useState(null)
-  const [newPrice, setNewPrice] = useState('')
+  const [newPrice, setNewPrice]       = useState('')
 
-  // Cash balance
-  const [cash, setCash] = useState(() => parseFloat(localStorage.getItem('bt_cash') || '0'))
+  // Cash — per account
+  const cashKey = accountKey('bt_cash', activeId)
+  const [cash, setCash] = useState(() => parseFloat(localStorage.getItem(cashKey) || '0'))
+
+  // Reload cash when account switches
+  useEffect(() => {
+    setCash(parseFloat(localStorage.getItem(cashKey) || '0'))
+  }, [cashKey])
+
   function handleCashUpdate(val) {
     const n = Math.max(0, parseFloat(val) || 0)
     setCash(n)
-    localStorage.setItem('bt_cash', String(n))
+    localStorage.setItem(cashKey, String(n))
   }
 
   // Price refresh
-  const [refreshing, setRefreshing] = useState(false)
-  const [refreshResult, setRefreshResult] = useState(null)  // { updated, errors }
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [finnhubKey, setFinnhubKey] = useState(() => localStorage.getItem('bt_finnhub_key') || '')
-  const [avKey, setAvKey]           = useState(() => localStorage.getItem('bt_av_key') || '')
+  const [refreshing, setRefreshing]   = useState(false)
+  const [refreshResult, setRefreshResult] = useState(null)
+  const [showApiKey, setShowApiKey]   = useState(false)
+  const [finnhubKey, setFinnhubKey]   = useState(() => localStorage.getItem('bt_finnhub_key') || '')
+  const [avKey, setAvKey]             = useState(() => localStorage.getItem('bt_av_key') || '')
 
-  // ── Trading handlers ───────────────────────────────────
+  // Account switcher
+  const [showAccounts, setShowAccounts] = useState(false)
+  const [renamingId, setRenamingId]   = useState(null)
+  const [renameVal, setRenameVal]     = useState('')
+  const [newAccName, setNewAccName]   = useState('')
+  const [showNewAcc, setShowNewAcc]   = useState(false)
+  const acctDropRef                   = useRef(null)
+
+  useEffect(() => {
+    if (!showAccounts) return
+    function handle(e) {
+      if (acctDropRef.current && !acctDropRef.current.contains(e.target)) setShowAccounts(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [showAccounts])
+
+  // ── Trading handlers ──────────────────────────────────────────
   function handleEditTrade(trade) { setEditTrade(trade); setShowForm(true) }
-
   function handleSaveTrade(form) {
     if (editTrade) { updateTrade(editTrade.id, form); setEditTrade(null) }
     else addTrade(form)
   }
-
   function handleCloseTradeForm() { setShowForm(false); setEditTrade(null) }
-
   function loadDemoData() {
-    if (trades.length > 0 && !confirm('This will replace your current trades with demo data. Continue?')) return
+    if (trades.length > 0 && !confirm('Replace current trades with demo data?')) return
     loadTrades(SEED_TRADES)
   }
 
-  // ── Investment handlers ────────────────────────────────
+  // ── Investment handlers ───────────────────────────────────────
   function handleEditInv(inv) { setEditInv(inv); setShowInvForm(true) }
-
   function handleSaveInv(form) {
     if (editInv) {
       const prev = editInv
       updateInvestment(prev.id, form)
       setEditInv(null)
-
       const prevShares = parseFloat(prev.shares) || 0
       const prevCost   = parseFloat(prev.avgCost) || 0
       const newShares  = parseFloat(form.shares) || 0
       const newCost    = parseFloat(form.avgCost) || 0
-
-      // Closing an open position → cash increases by sell proceeds
       if (prev.status === 'open' && form.status === 'closed') {
-        const sellPrice = parseFloat(form.sellPrice) || 0
-        handleCashUpdate(cash + prevShares * sellPrice)
-      }
-      // Changing share count or cost on an open position → adjust for the difference
-      else if (prev.status === 'open' && form.status === 'open') {
-        const prevCostBasis = prevShares * prevCost
-        const newCostBasis  = newShares * newCost
-        handleCashUpdate(cash - (newCostBasis - prevCostBasis))
+        handleCashUpdate(cash + prevShares * (parseFloat(form.sellPrice) || 0))
+      } else if (prev.status === 'open' && form.status === 'open') {
+        handleCashUpdate(cash - (newShares * newCost - prevShares * prevCost))
       }
     } else {
       addInvestment(form)
-      // New open position → deduct cost basis from cash
       if (form.status === 'open') {
-        const shares = parseFloat(form.shares) || 0
-        const cost   = parseFloat(form.avgCost) || 0
-        handleCashUpdate(cash - shares * cost)
+        handleCashUpdate(cash - (parseFloat(form.shares) || 0) * (parseFloat(form.avgCost) || 0))
       }
-      // New closed position entered directly → net proceeds added
       if (form.status === 'closed') {
-        const shares    = parseFloat(form.shares) || 0
-        const cost      = parseFloat(form.avgCost) || 0
-        const sellPrice = parseFloat(form.sellPrice) || 0
-        handleCashUpdate(cash + shares * (sellPrice - cost))
+        const s = parseFloat(form.shares) || 0
+        handleCashUpdate(cash + s * ((parseFloat(form.sellPrice) || 0) - (parseFloat(form.avgCost) || 0)))
       }
     }
   }
-
   function handleCloseInvForm() { setShowInvForm(false); setEditInv(null) }
-
   function handleDeleteInv(id) {
     const inv = investments.find(i => i.id === id)
-    if (inv) {
-      const shares       = parseFloat(inv.shares) || 0
-      const currentPrice = parseFloat(inv.currentPrice) || parseFloat(inv.avgCost) || 0
-      // Deleting an open position → return current market value to cash
-      if (inv.status === 'open') handleCashUpdate(cash + shares * currentPrice)
+    if (inv?.status === 'open') {
+      const shares = parseFloat(inv.shares) || 0
+      const price  = parseFloat(inv.currentPrice) || parseFloat(inv.avgCost) || 0
+      handleCashUpdate(cash + shares * price)
     }
     deleteInvestment(id)
   }
-
   function loadDemoInvestments() {
-    if (investments.length > 0 && !confirm('This will replace your current positions with demo data. Continue?')) return
+    if (investments.length > 0 && !confirm('Replace current positions with demo data?')) return
     loadInvestments(SEED_INVESTMENTS)
   }
-
   function handleUpdatePrice(inv) { setUpdatePriceInv(inv); setNewPrice(inv.currentPrice || '') }
-
   async function handleRefreshPrices() {
     setRefreshing(true)
     setRefreshResult(null)
     const open = investments.filter(i => i.status === 'open')
     const isCrypto = sym => ['BTC','ETH','SOL','BNB','XRP','ADA','DOGE','AVAX','DOT','MATIC'].includes(sym?.toUpperCase())
-    const needsKey = open.some(i => !isCrypto(i.symbol))
-    if (needsKey && !finnhubKey) { setShowApiKey(true); setRefreshing(false); return }
+    if (open.some(i => !isCrypto(i.symbol)) && !finnhubKey) { setShowApiKey(true); setRefreshing(false); return }
     try {
       const { prices, errors } = await fetchAllPrices(investments, finnhubKey)
       let updated = 0
@@ -146,25 +147,35 @@ export default function App() {
     }
     setRefreshing(false)
   }
-
-  function saveApiKey(key) {
-    setFinnhubKey(key)
-    localStorage.setItem('bt_finnhub_key', key)
-  }
-
-  function saveAvKey(key) {
-    setAvKey(key)
-    localStorage.setItem('bt_av_key', key)
-  }
-
+  function saveApiKey(key) { setFinnhubKey(key); localStorage.setItem('bt_finnhub_key', key) }
+  function saveAvKey(key)  { setAvKey(key);      localStorage.setItem('bt_av_key', key) }
   function submitPriceUpdate(e) {
     e.preventDefault()
     if (updatePriceInv) updateInvestment(updatePriceInv.id, { currentPrice: newPrice })
-    setUpdatePriceInv(null)
-    setNewPrice('')
+    setUpdatePriceInv(null); setNewPrice('')
+  }
+
+  // ── Account switcher handlers ─────────────────────────────────
+  function handleSwitch(id) {
+    switchTo(id)
+    setShowAccounts(false)
+    setRenamingId(null)
+  }
+  function startRename(id, name) { setRenamingId(id); setRenameVal(name) }
+  function commitRename(id) { renameAccount(id, renameVal); setRenamingId(null) }
+  function handleCreateAccount() {
+    if (!newAccName.trim()) return
+    createAccount(newAccName.trim())
+    setNewAccName('')
+    setShowNewAcc(false)
+    setShowAccounts(false)
   }
 
   const inputCls = 'bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500'
+
+  // EF storage keys are per-account
+  const efParamsKey         = accountKey('bt_ef_params', activeId)
+  const efResearchParamsKey = accountKey('bt_ef_research_params', activeId)
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
@@ -173,10 +184,77 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center gap-2 min-h-14">
           <div className="flex items-center gap-2 mr-auto">
             <span className="text-blue-400 font-bold text-lg tracking-tight">BT Speculation</span>
+
+            {/* Account switcher */}
+            <div className="relative" ref={acctDropRef}>
+              <button
+                onClick={() => { setShowAccounts(o => !o); setRenamingId(null); setShowNewAcc(false) }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-slate-100 transition-colors border border-slate-600/50"
+              >
+                {activeAccount.name}
+                <ChevronDown size={11} className="text-slate-500" />
+              </button>
+
+              {showAccounts && (
+                <div className="absolute top-full left-0 mt-1.5 w-56 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-50 overflow-hidden">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider px-3 pt-2.5 pb-1 font-semibold">Accounts</p>
+                  {accounts.map(acc => (
+                    <div key={acc.id}
+                      className={`flex items-center gap-1 px-2 py-1.5 group hover:bg-slate-700/50 ${acc.id === activeId ? 'bg-slate-700/40' : ''}`}
+                    >
+                      {renamingId === acc.id ? (
+                        <form onSubmit={e => { e.preventDefault(); commitRename(acc.id) }} className="flex items-center gap-1 flex-1">
+                          <input autoFocus value={renameVal} onChange={e => setRenameVal(e.target.value)}
+                            className="flex-1 bg-slate-700 border border-slate-500 rounded px-2 py-0.5 text-xs text-slate-100 focus:outline-none focus:border-blue-500" />
+                          <button type="submit" className="text-green-400 hover:text-green-300 p-0.5"><Check size={13} /></button>
+                          <button type="button" onClick={() => setRenamingId(null)} className="text-slate-500 hover:text-slate-300 p-0.5"><X size={13} /></button>
+                        </form>
+                      ) : (
+                        <>
+                          <button onClick={() => handleSwitch(acc.id)}
+                            className="flex-1 text-left text-xs flex items-center gap-2">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${acc.id === activeId ? 'bg-blue-400' : 'bg-slate-600'}`} />
+                            <span className={acc.id === activeId ? 'text-slate-100 font-semibold' : 'text-slate-300'}>{acc.name}</span>
+                          </button>
+                          <button onClick={() => startRename(acc.id, acc.name)}
+                            className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-slate-300 p-0.5 transition-opacity">
+                            <Pencil size={11} />
+                          </button>
+                          {accounts.length > 1 && acc.id !== 'default' && (
+                            <button onClick={() => { if (confirm(`Delete "${acc.name}"? All its data will be lost.`)) deleteAccount(acc.id) }}
+                              className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 p-0.5 transition-opacity">
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
+
+                  <div className="border-t border-slate-700 mt-1 p-2">
+                    {showNewAcc ? (
+                      <form onSubmit={e => { e.preventDefault(); handleCreateAccount() }} className="flex gap-1">
+                        <input autoFocus value={newAccName} onChange={e => setNewAccName(e.target.value)}
+                          placeholder="Account name…"
+                          className="flex-1 bg-slate-700 border border-slate-500 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-blue-500 placeholder:text-slate-600" />
+                        <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium">Add</button>
+                      </form>
+                    ) : (
+                      <button onClick={() => setShowNewAcc(true)}
+                        className="w-full flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-100 px-1 py-1 rounded hover:bg-slate-700/50 transition-colors">
+                        <Plus size={12} /> New account
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button onClick={openWatchlistModal} title="Watchlist"
               className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors">
               <Eye size={14} />
             </button>
+
             {/* Section tabs */}
             <div className="flex bg-slate-700/60 rounded-lg p-0.5 gap-0.5 ml-1">
               <button onClick={() => setSection('trading')}
@@ -265,7 +343,7 @@ export default function App() {
       </header>
 
       {/* Ticker tape */}
-      <TickerTape onSendTo={(dest, sym) => {
+      <TickerTape accountId={activeId} onSendTo={(dest, sym) => {
         setSection('analysis')
         setWatchlistNav({ dest, sym })
       }} />
@@ -298,6 +376,8 @@ export default function App() {
             cash={cash}
             watchlistNav={watchlistNav}
             onWatchlistNavConsumed={() => setWatchlistNav(null)}
+            efParamsKey={efParamsKey}
+            efResearchParamsKey={efResearchParamsKey}
           />
         )}
       </main>
@@ -320,41 +400,28 @@ export default function App() {
               <h3 className="text-base font-semibold text-slate-100">API Keys</h3>
               <button onClick={() => setShowApiKey(false)} className="text-slate-500 hover:text-slate-200"><X size={16} /></button>
             </div>
-
             <div className="space-y-5">
-              {/* Finnhub */}
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Finnhub</p>
-                <p className="text-xs text-slate-500 mb-2">
-                  Price refresh · Fundamentals · Research — free at <span className="text-blue-400">finnhub.io</span>
-                </p>
+                <p className="text-xs text-slate-500 mb-2">Price refresh · Fundamentals · Research — free at <span className="text-blue-400">finnhub.io</span></p>
                 <form onSubmit={e => { e.preventDefault(); saveApiKey(e.target.key.value.trim()) }} className="flex gap-2">
-                  <input name="key" type="text" defaultValue={finnhubKey} autoFocus
-                    placeholder="Finnhub API key…"
+                  <input name="key" type="text" defaultValue={finnhubKey} autoFocus placeholder="Finnhub API key…"
                     className={`flex-1 ${inputCls} font-mono text-sm`} />
-                  <button type="submit"
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-medium">Save</button>
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-medium">Save</button>
                 </form>
                 {finnhubKey && (
                   <button onClick={() => { setFinnhubKey(''); localStorage.removeItem('bt_finnhub_key') }}
                     className="mt-1 text-xs text-red-400 hover:text-red-300">Clear</button>
                 )}
               </div>
-
               <div className="border-t border-slate-700" />
-
-              {/* Alpha Vantage */}
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Alpha Vantage</p>
-                <p className="text-xs text-slate-500 mb-2">
-                  Financial Statements tab — free at <span className="text-blue-400">alphavantage.co</span> · 25 req/day
-                </p>
+                <p className="text-xs text-slate-500 mb-2">Financial Statements tab — free at <span className="text-blue-400">alphavantage.co</span> · 25 req/day</p>
                 <form onSubmit={e => { e.preventDefault(); saveAvKey(e.target.key.value.trim()) }} className="flex gap-2">
-                  <input name="key" type="text" defaultValue={avKey}
-                    placeholder="Alpha Vantage API key…"
+                  <input name="key" type="text" defaultValue={avKey} placeholder="Alpha Vantage API key…"
                     className={`flex-1 ${inputCls} font-mono text-sm`} />
-                  <button type="submit"
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-medium">Save</button>
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-medium">Save</button>
                 </form>
                 {avKey && (
                   <button onClick={() => { setAvKey(''); localStorage.removeItem('bt_av_key') }}
@@ -362,11 +429,8 @@ export default function App() {
                 )}
               </div>
             </div>
-
             <button onClick={() => setShowApiKey(false)}
-              className="mt-5 w-full bg-slate-700 hover:bg-slate-600 text-slate-300 py-2 rounded text-sm font-medium">
-              Done
-            </button>
+              className="mt-5 w-full bg-slate-700 hover:bg-slate-600 text-slate-300 py-2 rounded text-sm font-medium">Done</button>
           </div>
         </div>
       )}
@@ -380,9 +444,7 @@ export default function App() {
             )}
             {refreshResult.errors.length > 0 && (
               <div className="mt-1 space-y-0.5">
-                {refreshResult.errors.map((e, i) => (
-                  <p key={i} className="text-xs text-red-400">{e}</p>
-                ))}
+                {refreshResult.errors.map((e, i) => <p key={i} className="text-xs text-red-400">{e}</p>)}
               </div>
             )}
             {refreshResult.updated === 0 && refreshResult.errors.length === 0 && (

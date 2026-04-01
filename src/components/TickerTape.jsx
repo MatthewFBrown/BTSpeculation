@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { Plus, X, Eye } from 'lucide-react'
+import { accountKey } from '../hooks/useAccounts'
 
-const STORAGE_KEY = 'bt_watchlist'
+const BASE_KEY = 'bt_watchlist'
 
-function loadList() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
+function loadList(accountId) {
+  try { return JSON.parse(localStorage.getItem(accountKey(BASE_KEY, accountId)) || '[]') } catch { return [] }
 }
-function saveList(list) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)) } catch {}
+function saveList(list, accountId) {
+  try { localStorage.setItem(accountKey(BASE_KEY, accountId), JSON.stringify(list)) } catch {}
 }
 
 const SUGGESTIONS = [
@@ -15,12 +16,17 @@ const SUGGESTIONS = [
   'NFLX','V','JPM','BRK.B','UNH','XOM','WMT','COIN',
 ]
 
-export default function TickerTape({ onSendTo }) {
-  const [items, setItems]       = useState(loadList)
+export default function TickerTape({ onSendTo, accountId = 'default' }) {
+  const [items, setItems]       = useState(() => loadList(accountId))
   const [showModal, setShowModal] = useState(false)
   const [input, setInput]       = useState('')
   const [popup, setPopup]       = useState(null)   // { sym, x, y }
   const popupRef                = useRef(null)
+
+  // Reload watchlist when account switches
+  useEffect(() => {
+    setItems(loadList(accountId))
+  }, [accountId])
 
   // Close popup on outside click
   useEffect(() => {
@@ -37,14 +43,14 @@ export default function TickerTape({ onSendTo }) {
     if (!sym || items.includes(sym)) return
     const next = [...items, sym]
     setItems(next)
-    saveList(next)
+    saveList(next, accountId)
     setInput('')
   }
 
   function remove(sym) {
     const next = items.filter(s => s !== sym)
     setItems(next)
-    saveList(next)
+    saveList(next, accountId)
     setPopup(null)
   }
 

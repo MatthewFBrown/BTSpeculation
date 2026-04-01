@@ -3,6 +3,12 @@
   publish = "dist"
 
 [[redirects]]
+  from = "/yahoo-proxy/*"
+  to = "https://query2.finance.yahoo.com/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

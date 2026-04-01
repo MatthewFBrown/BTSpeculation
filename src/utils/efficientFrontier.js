@@ -1,5 +1,21 @@
 const RISK_FREE = 0.045
 
+// ── Real correlation override ─────────────────────────────────
+let _realCorr = {}
+export function setRealCorrelations(map) {
+  for (const [sym, pairs] of Object.entries(map)) {
+    if (!_realCorr[sym]) _realCorr[sym] = {}
+    Object.assign(_realCorr[sym], pairs)
+  }
+}
+
+// ── Computed asset params from historical weekly returns ──────
+// { AAPL: { r: 0.15, s: 0.22 }, ... }  — set by fetchCorrelations()
+let _computedParams = {}
+export function setComputedParams(map) {
+  Object.assign(_computedParams, map)
+}
+
 const ASSET_PARAMS = {
   AAPL:  { r: 0.15, s: 0.25, cat: 'tech' },
   NVDA:  { r: 0.38, s: 0.55, cat: 'tech' },
@@ -35,11 +51,21 @@ const CAT_CORR = {
 }
 
 export function getAssetParams(symbol) {
-  return ASSET_PARAMS[symbol?.toUpperCase()] || DEFAULT_PARAMS
+  const sym = symbol?.toUpperCase()
+  const base = ASSET_PARAMS[sym] || DEFAULT_PARAMS
+  const computed = _computedParams[sym]
+  if (!computed) return base
+  // Use computed r + s; keep category from static table for correlation fallback
+  return { ...base, r: computed.r, s: computed.s }
 }
 
 function getCorrelation(sym1, sym2) {
   if (sym1 === sym2) return 1.0
+  if (sym1 === 'CASH' || sym2 === 'CASH') return 0  // cash uncorrelated with all assets
+  // Use real computed correlation when available
+  const real = _realCorr[sym1]?.[sym2]
+  if (real !== undefined) return real
+  // Fall back to category estimate
   const c1 = getAssetParams(sym1).cat
   const c2 = getAssetParams(sym2).cat
   return CAT_CORR[c1]?.[c2] ?? 0.50
@@ -94,19 +120,27 @@ function extractFrontier(all, numBuckets = 150) {
   return frontier
 }
 
-export function generateEfficientFrontierData(investments, paramsOverride = {}) {
+export function generateEfficientFrontierData(investments, paramsOverride = {}, cashOptions = {}) {
+  const { amount: cashAmount = 0, rate: cashRate = 0.03 } = cashOptions
   const open = investments.filter(i =>
     i.status === 'open' && parseFloat(i.shares) > 0 && parseFloat(i.avgCost) > 0
   )
   if (open.length < 2) return { frontier: [], current: null, minVol: null, maxSharpe: null }
 
-  const symbols = open.map(i => i.symbol)
+  const stockSymbols = open.map(i => i.symbol)
   const mvs = open.map(i => (parseFloat(i.shares) || 0) * (parseFloat(i.currentPrice) || parseFloat(i.avgCost) || 0))
-  const totalMV = mvs.reduce((a, b) => a + b, 0)
-  const currentWeights = mvs.map(v => v / totalMV)
+  const stockTotalMV = mvs.reduce((a, b) => a + b, 0)
+
+  const hasCash   = cashAmount > 0
+  const totalMV   = stockTotalMV + (hasCash ? cashAmount : 0)
+  const symbols   = hasCash ? [...stockSymbols, 'CASH'] : stockSymbols
+  const currentWeights = hasCash
+    ? [...mvs.map(v => v / totalMV), cashAmount / totalMV]
+    : mvs.map(v => v / stockTotalMV)
 
   // Merge user overrides with defaults for each symbol
   const paramsArr = symbols.map(sym => {
+    if (sym === 'CASH') return { r: cashRate, s: 0.001, cat: 'cash' }
     const base = getAssetParams(sym)
     const over = paramsOverride[sym] || {}
     return { ...base, r: over.r ?? base.r, s: over.s ?? base.s, cat: base.cat }
@@ -151,6 +185,86 @@ export function generateEfficientFrontierData(investments, paramsOverride = {}) 
     current,
     minVol:    minVolPt    ? { ...minVolPt,    allocation: buildAllocation(minVolWeights) }    : null,
     maxSharpe: maxSharpePt ? { ...maxSharpePt, allocation: buildAllocation(maxSharpeWeights) } : null,
+  }
+}
+
+// Correlation matrix for any arbitrary list of symbols (not just investments)
+export function getCorrelationMatrixForSymbols(symbols) {
+  const matrix = symbols.map(s1 => symbols.map(s2 => +getCorrelation(s1, s2).toFixed(2)))
+  return { symbols, matrix }
+}
+
+// Efficient frontier that combines existing portfolio positions with extra (researched) symbols.
+// Current portfolio point uses actual weights for portfolio symbols, 0 for extras.
+// The simulation explores all possible allocations across all symbols combined.
+export function generateCombinedFrontierData(portfolioInvestments, extraSymbols = [], paramsOverride = {}, cashOptions = {}) {
+  const { amount: cashAmount = 0, rate: cashRate = 0.03 } = cashOptions
+  const open = portfolioInvestments.filter(i =>
+    i.status === 'open' && parseFloat(i.shares) > 0 && parseFloat(i.avgCost) > 0
+  )
+  if (open.length === 0 || extraSymbols.length === 0)
+    return { frontier: [], current: null, minVol: null, maxSharpe: null, portSymbols: [], newSymbols: [] }
+
+  const portSymbols = open.map(i => i.symbol)
+  const newSymbols  = extraSymbols.filter(s => !portSymbols.includes(s))
+  const hasCash     = cashAmount > 0
+  // CASH goes at the end, treated as a portfolio symbol (not "new")
+  const allSymbols  = [...portSymbols, ...newSymbols, ...(hasCash ? ['CASH'] : [])]
+  if (allSymbols.length < 2)
+    return { frontier: [], current: null, minVol: null, maxSharpe: null, portSymbols, newSymbols }
+
+  const mvs         = open.map(i => (parseFloat(i.shares) || 0) * (parseFloat(i.currentPrice) || parseFloat(i.avgCost) || 0))
+  const stockTotalMV = mvs.reduce((a, b) => a + b, 0)
+  const totalMV     = stockTotalMV + (hasCash ? cashAmount : 0)
+  const portWeights = mvs.map(v => v / totalMV)
+  const currentWeights = [...portWeights, ...new Array(newSymbols.length).fill(0), ...(hasCash ? [cashAmount / totalMV] : [])]
+
+  const paramsArr = allSymbols.map(sym => {
+    if (sym === 'CASH') return { r: cashRate, s: 0.001, cat: 'cash' }
+    const base = getAssetParams(sym)
+    const over = paramsOverride[sym] || {}
+    return { ...base, r: over.r ?? base.r, s: over.s ?? base.s, cat: base.cat }
+  })
+
+  const all = []
+  let minVolPt = null, maxSharpePt = null
+  let minVolWeights = null, maxSharpeWeights = null
+
+  for (let k = 0; k < 10000; k++) {
+    const w = randomWeights(allSymbols.length)
+    const { ret, vol, sharpe } = portfolioStats(allSymbols, w, paramsArr)
+    const pt = { ret: +(ret * 100).toFixed(2), vol: +(vol * 100).toFixed(2), sharpe: +sharpe.toFixed(3), _w: w }
+    all.push(pt)
+    if (!minVolPt    || pt.vol    < minVolPt.vol)    { minVolPt    = pt; minVolWeights    = w }
+    if (!maxSharpePt || pt.sharpe > maxSharpePt.sharpe) { maxSharpePt = pt; maxSharpeWeights = w }
+  }
+
+  function buildAllocation(weights) {
+    return allSymbols
+      .map((sym, i) => ({ symbol: sym, weight: +(weights[i] * 100).toFixed(1) }))
+      .sort((a, b) => b.weight - a.weight)
+  }
+
+  const frontier = extractFrontier(all).map(pt => ({
+    ret: pt.ret, vol: pt.vol, sharpe: pt.sharpe,
+    allocation: buildAllocation(pt._w),
+  }))
+
+  const cur = portfolioStats(allSymbols, currentWeights, paramsArr)
+  const current = {
+    ret: +(cur.ret * 100).toFixed(2),
+    vol: +(cur.vol * 100).toFixed(2),
+    sharpe: +cur.sharpe.toFixed(3),
+    allocation: buildAllocation(currentWeights),
+  }
+
+  return {
+    frontier,
+    current,
+    minVol:    minVolPt    ? { ...minVolPt,    allocation: buildAllocation(minVolWeights) }    : null,
+    maxSharpe: maxSharpePt ? { ...maxSharpePt, allocation: buildAllocation(maxSharpeWeights) } : null,
+    portSymbols: hasCash ? [...portSymbols, 'CASH'] : portSymbols,
+    newSymbols,
   }
 }
 

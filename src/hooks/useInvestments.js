@@ -1,35 +1,44 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { accountKey } from './useAccounts'
 
-const STORAGE_KEY = 'bt_speculation_investments'
+const BASE_KEY = 'bt_speculation_investments'
 
-export function useInvestments() {
-  const [investments, setInvestments] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      return stored ? JSON.parse(stored) : []
-    } catch {
-      return []
-    }
+export function useInvestments(accountId = 'default') {
+  const storageKey = accountKey(BASE_KEY, accountId)
+
+  const [investments, setInvestmentsRaw] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey) || '[]') } catch { return [] }
   })
 
+  const keyRef = useRef(storageKey)
+
+  // When account switches, load from new key without saving the old data there
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(investments))
+    if (keyRef.current === storageKey) return
+    keyRef.current = storageKey
+    try { setInvestmentsRaw(JSON.parse(localStorage.getItem(storageKey) || '[]')) }
+    catch { setInvestmentsRaw([]) }
+  }, [storageKey])
+
+  // Save on every change (to whichever key is current)
+  useEffect(() => {
+    localStorage.setItem(keyRef.current, JSON.stringify(investments))
   }, [investments])
 
   function addInvestment(inv) {
-    setInvestments(prev => [{ ...inv, id: crypto.randomUUID(), createdAt: new Date().toISOString() }, ...prev])
+    setInvestmentsRaw(prev => [{ ...inv, id: crypto.randomUUID(), createdAt: new Date().toISOString() }, ...prev])
   }
 
   function updateInvestment(id, updates) {
-    setInvestments(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i))
+    setInvestmentsRaw(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i))
   }
 
   function deleteInvestment(id) {
-    setInvestments(prev => prev.filter(i => i.id !== id))
+    setInvestmentsRaw(prev => prev.filter(i => i.id !== id))
   }
 
   function loadInvestments(list) {
-    setInvestments(list)
+    setInvestmentsRaw(list)
   }
 
   return { investments, addInvestment, updateInvestment, deleteInvestment, loadInvestments }
