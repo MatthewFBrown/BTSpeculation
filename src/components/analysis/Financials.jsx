@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { fetchFinancials } from '../../utils/fetchFinancials'
 import { MOCK_FINANCIALS } from '../../utils/mockFinancials'
-import { RefreshCw, AlertTriangle, KeyRound } from 'lucide-react'
+import { RefreshCw, AlertTriangle, KeyRound, Search, X } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
@@ -90,7 +90,7 @@ const SECTIONS = [
 
 // ── Sub-components ────────────────────────────────────────────
 function FinChart({ data, bars }) {
-  const chartData = data.map(r => ({
+  const chartData = [...data].reverse().map(r => ({
     label: periodLabel(r),
     ...Object.fromEntries(bars.map(b => [b.key, r[b.key]])),
   }))
@@ -183,16 +183,19 @@ function FinTable({ data, rows }) {
 // ── Main Component ────────────────────────────────────────────
 export default function Financials({ investments, preloadSymbol }) {
   const open = investments.filter(i => i.status === 'open')
-  const [selected, setSelected] = useState(preloadSymbol || open[0]?.symbol || '')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState(null)
-  const [freq, setFreq]         = useState('annual')
-  const [section, setSection]   = useState('income')
+  const [selected, setSelected]     = useState(preloadSymbol || open[0]?.symbol || '')
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState(null)
+  const [freq, setFreq]             = useState('annual')
+  const [section, setSection]       = useState('income')
+  const [input, setInput]           = useState('')
+  const [extraSymbols, setExtraSymbols] = useState([])
 
   const apiKey = localStorage.getItem('bt_av_key') || ''
 
   // Persist fetched data in localStorage so page refreshes don't cost API calls
   const CACHE_KEY = 'bt_financials_cache'
+  const TS_KEY    = 'bt_financials_ts'
   const [cache, setCache] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
@@ -201,11 +204,28 @@ export default function Financials({ investments, preloadSymbol }) {
       return stored
     } catch { return { MSFT: MOCK_FINANCIALS } }
   })
+  const [timestamps, setTimestamps] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(TS_KEY) || '{}') } catch { return {} }
+  })
 
   function updateCache(sym, result) {
     const next = { ...cache, [sym]: result }
     setCache(next)
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)) } catch {}
+    const ts = { ...timestamps, [sym]: Date.now() }
+    setTimestamps(ts)
+    try { localStorage.setItem(TS_KEY, JSON.stringify(ts)) } catch {}
+  }
+
+  function fmtAge(sym) {
+    const ts = timestamps[sym]
+    if (!ts) return null
+    const mins = Math.floor((Date.now() - ts) / 60000)
+    if (mins < 1)   return 'just now'
+    if (mins < 60)  return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24)   return `${hrs}h ago`
+    return `${Math.floor(hrs / 24)}d ago`
   }
 
   const load = useCallback(async (sym) => {
@@ -237,14 +257,10 @@ export default function Financials({ investments, preloadSymbol }) {
 
   function select(sym) { setSelected(sym) }
 
-  // Auto-load on mount and when preloadSymbol changes from Watchlist
+  // When a ticker tape click arrives, switch to that symbol
   useEffect(() => {
     if (preloadSymbol) setSelected(preloadSymbol)
   }, [preloadSymbol])
-
-  useEffect(() => {
-    if (selected && apiKey && error !== 'no_key') load(selected)
-  }, [selected, apiKey])  // eslint-disable-line
 
   if (open.length === 0) {
     return <div className="text-center text-slate-500 py-16 text-sm">No open positions to analyse.</div>
@@ -270,8 +286,32 @@ export default function Financials({ investments, preloadSymbol }) {
 
   return (
     <div className="space-y-4">
-      {/* Symbol selector */}
+      {/* Search + symbol selector */}
       <div className="flex flex-wrap gap-2 items-center">
+        <form onSubmit={e => {
+          e.preventDefault()
+          const sym = input.trim().toUpperCase()
+          if (!sym) return
+          if (!open.find(i => i.symbol === sym) && !extraSymbols.includes(sym))
+            setExtraSymbols(prev => [...prev, sym])
+          select(sym)
+          setInput('')
+        }} className="flex gap-1.5">
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value.toUpperCase())}
+              placeholder="Search ticker…"
+              className="bg-slate-800 border border-slate-700 rounded-lg pl-7 pr-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-blue-500 placeholder:text-slate-600 font-mono w-32"
+            />
+          </div>
+          <button type="submit" disabled={!input.trim()}
+            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+            Go
+          </button>
+        </form>
+
         {open.map(i => (
           <button key={i.symbol} onClick={() => select(i.symbol)}
             className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
@@ -282,12 +322,34 @@ export default function Financials({ investments, preloadSymbol }) {
             {i.symbol}
           </button>
         ))}
+
+        {extraSymbols.map(sym => (
+          <div key={sym} className={`flex items-center gap-1 pl-3 pr-1.5 py-1.5 rounded-lg border text-sm font-semibold transition-colors ${
+            selected === sym
+              ? 'bg-blue-600 border-blue-500 text-white'
+              : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+          }`}>
+            <button onClick={() => select(sym)}>{sym}</button>
+            <button onClick={() => {
+              setExtraSymbols(prev => prev.filter(s => s !== sym))
+              if (selected === sym) select(open[0]?.symbol || '')
+            }} className="ml-0.5 opacity-50 hover:opacity-100">
+              <X size={11} />
+            </button>
+          </div>
+        ))}
+
         {selected && (
-          <button onClick={() => reload(selected)} disabled={loading}
-            className="ml-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg disabled:opacity-50">
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-            {loading ? 'Loading…' : 'Refresh'}
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            {fmtAge(selected) && (
+              <span className="text-[10px] text-slate-600">fetched {fmtAge(selected)}</span>
+            )}
+            <button onClick={() => reload(selected)} disabled={loading}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg disabled:opacity-50">
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+              {loading ? 'Loading…' : 'Refresh'}
+            </button>
+          </div>
         )}
       </div>
 
@@ -300,6 +362,16 @@ export default function Financials({ investments, preloadSymbol }) {
       {loading && !d && (
         <div className="text-center py-16 text-slate-500 text-sm animate-pulse">
           Loading financials for {selected}…
+        </div>
+      )}
+
+      {!loading && selected && !d && (
+        <div className="text-center py-16 space-y-3">
+          <p className="text-slate-500 text-sm">No data loaded for <span className="font-mono text-slate-300">{selected}</span>.</p>
+          <button onClick={() => reload(selected)}
+            className="flex items-center gap-1.5 mx-auto text-xs text-slate-300 bg-slate-700 hover:bg-slate-600 border border-slate-600 px-4 py-2 rounded-lg">
+            <RefreshCw size={12} /> Load Financials
+          </button>
         </div>
       )}
 

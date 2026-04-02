@@ -1,3 +1,5 @@
+import { trackAVCalls } from './avCallTracker'
+
 const AV_BASE = 'https://www.alphavantage.co/query'
 
 async function get(func, symbol, apiKey) {
@@ -77,6 +79,7 @@ function parseReports(income, balance, cash, isAnnual) {
 export async function fetchFinancials(symbol, apiKey) {
   const sym = symbol.toUpperCase()
   // 3 parallel calls — well within AV's 5 req/min free limit
+  trackAVCalls(3)
   const [income, balance, cash] = await Promise.all([
     get('INCOME_STATEMENT', sym, apiKey),
     get('BALANCE_SHEET',    sym, apiKey),

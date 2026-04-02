@@ -188,6 +188,83 @@ export function generateEfficientFrontierData(investments, paramsOverride = {}, 
   }
 }
 
+// ── Subset Optimizer ──────────────────────────────────────────
+function buildParamsArr(symbols, paramsOverride = {}) {
+  return symbols.map(sym => {
+    const base = getAssetParams(sym)
+    const over = paramsOverride[sym] || {}
+    return { ...base, r: over.r ?? base.r, s: over.s ?? base.s }
+  })
+}
+
+function getMaxSharpeForSubset(symbols, nSim = 4000, paramsOverride = {}) {
+  const paramsArr = buildParamsArr(symbols, paramsOverride)
+  if (symbols.length === 1) {
+    const p = portfolioStats(symbols, [1], paramsArr)
+    return { sharpe: +p.sharpe.toFixed(3), ret: +(p.ret * 100).toFixed(2), vol: +(p.vol * 100).toFixed(2), weights: [1] }
+  }
+  let bestSharpe = -Infinity, bestRet = 0, bestVol = 0, bestWeights = null
+  for (let k = 0; k < nSim; k++) {
+    const w = randomWeights(symbols.length)
+    const { ret, vol, sharpe } = portfolioStats(symbols, w, paramsArr)
+    if (sharpe > bestSharpe) { bestSharpe = sharpe; bestRet = ret; bestVol = vol; bestWeights = [...w] }
+  }
+  return {
+    sharpe: +bestSharpe.toFixed(3),
+    ret: +(bestRet * 100).toFixed(2),
+    vol: +(bestVol * 100).toFixed(2),
+    weights: bestWeights,
+  }
+}
+
+function runBackwardElimination(allSymbols, paramsOverride = {}, nSim = 6000) {
+  let current = [...allSymbols]
+  const steps = []
+  const subSim = Math.max(1000, Math.round(nSim * 0.6))
+
+  const full = getMaxSharpeForSubset(current, nSim, paramsOverride)
+  steps.push({ symbols: [...current], sharpe: full.sharpe, ret: full.ret, vol: full.vol, dropped: null, weights: full.weights })
+
+  while (current.length > 2) {
+    let bestSharpe = -Infinity, bestDrop = null, bestResult = null
+    for (const sym of current) {
+      const subset = current.filter(s => s !== sym)
+      const r = getMaxSharpeForSubset(subset, subSim, paramsOverride)
+      if (r.sharpe > bestSharpe) { bestSharpe = r.sharpe; bestDrop = sym; bestResult = r }
+    }
+    if (bestResult.sharpe <= steps[steps.length - 1].sharpe) break
+    current = current.filter(s => s !== bestDrop)
+    steps.push({ symbols: [...current], sharpe: bestResult.sharpe, ret: bestResult.ret, vol: bestResult.vol, dropped: bestDrop, weights: bestResult.weights })
+  }
+
+  const optimal = steps[steps.length - 1]
+  return {
+    steps,
+    fullSharpe: full.sharpe,
+    fullSymbols: allSymbols,
+    optimalSymbols: optimal.symbols,
+    optimalSharpe: optimal.sharpe,
+    optimalRet: optimal.ret,
+    optimalVol: optimal.vol,
+    optimalWeights: optimal.weights,
+    improved: optimal.sharpe > full.sharpe,
+    dropped: steps.slice(1).map(s => s.dropped),
+  }
+}
+
+// Run on open portfolio positions
+export function findOptimalSubset(investments, paramsOverride = {}, nSim = 6000) {
+  const open = investments.filter(i => i.status === 'open' && parseFloat(i.shares) > 0)
+  if (open.length < 2) return null
+  return runBackwardElimination(open.map(i => i.symbol), paramsOverride, nSim)
+}
+
+// Run on an arbitrary list of ticker symbols (e.g. from sector browser)
+export function findOptimalSubsetForSymbols(symbols, paramsOverride = {}, nSim = 6000) {
+  if (!symbols || symbols.length < 2) return null
+  return runBackwardElimination(symbols, paramsOverride, nSim)
+}
+
 // Correlation matrix for any arbitrary list of symbols (not just investments)
 export function getCorrelationMatrixForSymbols(symbols) {
   const matrix = symbols.map(s1 => symbols.map(s2 => +getCorrelation(s1, s2).toFixed(2)))

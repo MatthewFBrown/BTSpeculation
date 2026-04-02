@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { fetchFundamentals } from '../../utils/fetchFundamentals'
+import { fetchFinancials } from '../../utils/fetchFinancials'
 import { fmtInv } from '../../utils/investmentCalcs'
-import { Search, X, RefreshCw, KeyRound, AlertTriangle, LayoutList, Columns, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, X, RefreshCw, KeyRound, AlertTriangle, LayoutList, Columns, ExternalLink, ChevronDown, ChevronUp, DatabaseZap, Globe, TrendingUp } from 'lucide-react'
 import { getCorrelationMatrixForSymbols, setRealCorrelations, setComputedParams } from '../../utils/efficientFrontier'
 import { fetchCorrelations } from '../../utils/fetchCorrelations'
 import FrontierPanel from './FrontierPanel'
+import { SECTORS } from '../../utils/sectorStocks'
 
 // ── Formatters ────────────────────────────────────────────────
 const fmt  = (v, suffix = '', dec = 2) => v == null || isNaN(v) ? '—' : `${Number(v).toFixed(dec)}${suffix}`
@@ -348,8 +350,8 @@ function CorrelationHeatmap({ portSymbols, researchSymbols, corrVersion = 0 }) {
                 <span className={researchSymbols.includes(row) ? 'text-violet-400' : 'text-blue-400'}>{row}</span>
               </td>
               {matrix[i].map((val, j) => (
-                <td key={j} className={`w-10 h-8 text-center font-semibold tabular-nums rounded-sm mx-px ${corrColor(val)}`}>
-                  {val.toFixed(2)}
+                <td key={j} className={`w-10 h-8 text-center font-semibold tabular-nums rounded-sm mx-px ${j > i ? '' : corrColor(i === j ? 0 : val)}`}>
+                  {j > i ? '' : i === j ? '—' : val.toFixed(2)}
                 </td>
               ))}
             </tr>
@@ -466,17 +468,131 @@ function PortfolioContext({ investments, loadedSymbols, dataMap, cash = 0, efRes
   )
 }
 
-// ── Main Component ────────────────────────────────────────────
-export default function Research({ preloadSymbol, investments = [], cash = 0, efResearchParamsKey = 'bt_ef_research_params' }) {
-  const [input, setInput]       = useState('')
-  const [symbols, setSymbols]   = useState([])
-  const [dataMap, setDataMap]   = useState({})
-  const [loading, setLoading]   = useState({})
-  const [errors, setErrors]     = useState({})
-  const [selected, setSelected] = useState(null)
-  const [view, setView]         = useState('single')  // 'single' | 'compare'
+// ── Sector Browser ────────────────────────────────────────────
+function SectorBrowser({ onAdd, onSendToOptimizer }) {
+  const [open, setOpen]           = useState(false)
+  const [activeSector, setActiveSector] = useState(SECTORS[0].id)
+  const [selected, setSelected]   = useState(new Set())
 
-  const apiKey = localStorage.getItem('bt_finnhub_key') || ''
+  const sector = SECTORS.find(s => s.id === activeSector)
+
+  function toggle(sym) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(sym) ? next.delete(sym) : next.add(sym)
+      return next
+    })
+  }
+
+  function handleAdd() {
+    onAdd([...selected])
+    setSelected(new Set())
+  }
+
+  return (
+    <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-700/30 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Globe size={14} className="text-slate-500" />
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Sector Browser</span>
+          <span className="text-[10px] text-slate-600">— top 20 stocks by market cap</span>
+        </div>
+        {open ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-700 p-4 space-y-3">
+          {/* Sector tabs */}
+          <div className="flex flex-wrap gap-1.5">
+            {SECTORS.map(s => (
+              <button key={s.id} onClick={() => setActiveSector(s.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  activeSector === s.id
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-200'
+                }`}>
+                {s.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Stock grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            {sector.stocks.map(({ sym, name }) => {
+              const isSelected = selected.has(sym)
+              return (
+                <button key={sym} onClick={() => toggle(sym)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-colors ${
+                    isSelected
+                      ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                      : 'bg-slate-700/50 border-slate-700 text-slate-300 hover:border-slate-500 hover:bg-slate-700'
+                  }`}>
+                  <span className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center text-[9px] font-bold ${
+                    isSelected ? 'bg-blue-500 border-blue-400 text-white' : 'border-slate-600'
+                  }`}>
+                    {isSelected ? '✓' : ''}
+                  </span>
+                  <span>
+                    <span className="block text-xs font-mono font-bold">{sym}</span>
+                    <span className="block text-[10px] text-slate-500 leading-tight">{name}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Action bar */}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[10px] text-slate-600">
+              {selected.size > 0 ? `${selected.size} selected` : 'Click stocks to select'}
+            </span>
+            <div className="flex items-center gap-2">
+              {selected.size > 0 && (
+                <button onClick={() => setSelected(new Set())}
+                  className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors">
+                  Clear
+                </button>
+              )}
+              {onSendToOptimizer && (
+                <button
+                  onClick={() => { onSendToOptimizer([...selected]); setSelected(new Set()) }}
+                  disabled={selected.size < 2}
+                  className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-xs font-medium transition-colors">
+                  <TrendingUp size={12} /> Send to Optimizer
+                </button>
+              )}
+              <button
+                onClick={handleAdd}
+                disabled={selected.size === 0}
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-xs font-medium transition-colors">
+                <Columns size={12} /> Add to Compare
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main Component ────────────────────────────────────────────
+export default function Research({ preloadSymbol, investments = [], cash = 0, efResearchParamsKey = 'bt_ef_research_params', onSendToOptimizer }) {
+  const [input, setInput]           = useState('')
+  const [symbols, setSymbols]       = useState([])
+  const [dataMap, setDataMap]       = useState({})
+  const [loading, setLoading]       = useState({})
+  const [errors, setErrors]         = useState({})
+  const [selected, setSelected]     = useState(null)
+  const [view, setView]             = useState('single')  // 'single' | 'compare'
+  const [finLoading, setFinLoading] = useState({})
+  const [finLoaded, setFinLoaded]   = useState({})
+
+  const apiKey   = localStorage.getItem('bt_finnhub_key') || ''
+  const avApiKey = localStorage.getItem('bt_av_key') || ''
+  const FIN_CACHE_KEY = 'bt_financials_cache'
 
   // Load symbol sent from Watchlist
   useEffect(() => {
@@ -513,6 +629,13 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
     setLoading(prev => ({ ...prev, [sym]: false }))
   }, [apiKey])
 
+  const clearAll = () => {
+    setSymbols([])
+    setDataMap({})
+    setErrors({})
+    setSelected(null)
+  }
+
   const remove = (sym) => {
     setSymbols(prev => prev.filter(s => s !== sym))
     setDataMap(prev => { const n = { ...prev }; delete n[sym]; return n })
@@ -524,6 +647,28 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
     loadSymbol(input)
     setInput('')
   }
+
+  const loadFinancials = useCallback(async (sym) => {
+    if (!avApiKey) return
+    setFinLoading(prev => ({ ...prev, [sym]: true }))
+    try {
+      const result = await fetchFinancials(sym, avApiKey)
+      const existing = JSON.parse(localStorage.getItem(FIN_CACHE_KEY) || '{}')
+      localStorage.setItem(FIN_CACHE_KEY, JSON.stringify({ ...existing, [sym]: result }))
+      setFinLoaded(prev => ({ ...prev, [sym]: true }))
+    } catch {}
+    setFinLoading(prev => ({ ...prev, [sym]: false }))
+  }, [avApiKey])
+
+  // Seed finLoaded from existing cache on mount
+  useEffect(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem(FIN_CACHE_KEY) || '{}')
+      const loaded = {}
+      for (const k of Object.keys(cached)) loaded[k] = true
+      setFinLoaded(loaded)
+    } catch {}
+  }, [])
 
   if (!apiKey) {
     return (
@@ -537,6 +682,12 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
 
   return (
     <div className="space-y-4">
+      {/* Sector browser */}
+      <SectorBrowser
+        onAdd={syms => { syms.forEach(s => loadSymbol(s)); setView('compare') }}
+        onSendToOptimizer={onSendToOptimizer}
+      />
+
       {/* Search bar */}
       <form onSubmit={handleSubmit} className="flex gap-2">
         <div className="relative flex-1 max-w-xs">
@@ -581,9 +732,14 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
             </div>
           ))}
 
-          {/* View toggle */}
+          {/* View toggle + clear */}
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={clearAll}
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              Clear all
+            </button>
           {symbols.length >= 2 && (
-            <div className="ml-auto flex bg-slate-700 rounded-lg p-0.5 gap-0.5">
+            <div className="flex bg-slate-700 rounded-lg p-0.5 gap-0.5">
               <button onClick={() => setView('single')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${view === 'single' ? 'bg-slate-600 text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}>
                 <LayoutList size={12} /> Single
@@ -594,6 +750,7 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
               </button>
             </div>
           )}
+          </div>
         </div>
       )}
 
@@ -619,7 +776,18 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
 
       {view === 'single' && selected && dataMap[selected] && (
         <div>
-          <div className="flex justify-end mb-3">
+          <div className="flex justify-end gap-2 mb-3">
+            {avApiKey && (
+              <button
+                onClick={() => loadFinancials(selected)}
+                disabled={finLoading[selected]}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border disabled:opacity-50 transition-colors bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200"
+                title="Fetch Alpha Vantage financials for this symbol and cache them for the Financials tab"
+              >
+                <DatabaseZap size={12} className={finLoading[selected] ? 'animate-pulse' : ''} />
+                {finLoading[selected] ? 'Loading…' : finLoaded[selected] ? 'Financials ✓' : 'Load Financials'}
+              </button>
+            )}
             <button onClick={() => reload(selected)} disabled={loading[selected]}
               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg disabled:opacity-50">
               <RefreshCw size={12} className={loading[selected] ? 'animate-spin' : ''} />

@@ -5,6 +5,7 @@ import Fundamentals from './Fundamentals'
 import Financials from './Financials'
 import Research from './Research'
 import DCF from './DCF'
+import PortfolioOptimizer from './PortfolioOptimizer'
 import { fetchCorrelations } from '../../utils/fetchCorrelations'
 import { setRealCorrelations, setComputedParams } from '../../utils/efficientFrontier'
 
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'research',     label: 'Research' },
   { id: 'dcf',          label: 'DCF' },
   { id: 'frontier',     label: 'Efficient Frontier' },
+  { id: 'optimizer',    label: 'Optimizer' },
   { id: 'risk',         label: 'Risk' },
 ]
 
@@ -22,6 +24,7 @@ export default function AnalysisDashboard({ investments, cash = 0, watchlistNav,
   const [researchSymbol,   setResearchSymbol]   = useState(null)
   const [financialsSymbol, setFinancialsSymbol] = useState(null)
   const [corrVersion, setCorrVersion]           = useState(0)
+  const [optimizerSymbols, setOptimizerSymbols] = useState(null)
 
   // Fetch real correlations for open portfolio positions
   useEffect(() => {
@@ -65,10 +68,11 @@ export default function AnalysisDashboard({ investments, cash = 0, watchlistNav,
 
       {tab === 'fundamentals' && <Fundamentals investments={investments} />}
       {tab === 'financials'   && <Financials         investments={investments} preloadSymbol={financialsSymbol} />}
-      {tab === 'research'     && <Research           investments={investments} cash={cash} preloadSymbol={researchSymbol} efResearchParamsKey={efResearchParamsKey} />}
+      {tab === 'research'     && <Research           investments={investments} cash={cash} preloadSymbol={researchSymbol} efResearchParamsKey={efResearchParamsKey} onSendToOptimizer={syms => { setOptimizerSymbols(syms); setTab('optimizer') }} />}
       {tab === 'dcf'          && <DCF                 investments={investments} />}
-      {tab === 'frontier'     && <EfficientFrontier  investments={investments} cash={cash} storageKey={efParamsKey} />}
-      {tab === 'risk'         && <RiskAnalysis       investments={investments} cash={cash} corrVersion={corrVersion} />}
+      {tab === 'frontier'     && <EfficientFrontier   investments={investments} cash={cash} storageKey={efParamsKey} />}
+      {tab === 'optimizer'    && <PortfolioOptimizer  investments={investments} corrVersion={corrVersion} incomingSymbols={optimizerSymbols} onClearIncoming={() => setOptimizerSymbols(null)} />}
+      {tab === 'risk'         && <RiskAnalysis        investments={investments} cash={cash} corrVersion={corrVersion} />}
     </div>
   )
 }

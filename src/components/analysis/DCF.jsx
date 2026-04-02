@@ -39,15 +39,20 @@ function Tip({ text }) {
       >
         <HelpCircle size={11} />
       </button>
-      {show && (
-        <span className="fixed z-[9999] w-64 bg-slate-950 border border-slate-500 rounded-xl px-3 py-2.5 text-xs text-slate-200 leading-relaxed shadow-2xl pointer-events-none"
-          style={{
-            top: ref.current ? ref.current.getBoundingClientRect().bottom + 8 : 0,
-            left: ref.current ? Math.min(ref.current.getBoundingClientRect().left - 8, window.innerWidth - 280) : 0,
-          }}>
-          {text}
-        </span>
-      )}
+      {show && ref.current && (() => {
+        const r = ref.current.getBoundingClientRect()
+        const tipW = 240
+        const pad = 8
+        let left = r.left - 8
+        if (left + tipW + pad > window.innerWidth) left = window.innerWidth - tipW - pad
+        if (left < pad) left = pad
+        return (
+          <span className="fixed z-[9999] bg-slate-950 border border-slate-600 rounded-xl px-3 py-2.5 text-xs text-slate-200 leading-relaxed shadow-2xl pointer-events-none"
+            style={{ top: r.bottom + 6, left, width: tipW }}>
+            {text}
+          </span>
+        )
+      })()}
     </span>
   )
 }
@@ -62,13 +67,13 @@ function runDCF({ baseFCF, growthRate, terminalRate, discountRate, sharesOutstan
   let pv = 0
   for (let t = 1; t <= YEARS; t++) {
     const fcf = baseFCF * Math.pow(1 + g, t)
-    const discounted = fcf / Math.pow(1 + r, t)
+    const discounted = fcf / Math.pow(1 + r, t - 0.5)  // mid-year convention
     projectedFCF.push({ year: `Yr ${t}`, fcf, discounted })
     pv += discounted
   }
   const fcfYear5 = baseFCF * Math.pow(1 + g, YEARS)
   const terminalValue = (fcfYear5 * (1 + gt)) / (r - gt)
-  const pvTerminal = terminalValue / Math.pow(1 + r, YEARS)
+  const pvTerminal = terminalValue / Math.pow(1 + r, YEARS)  // terminal discounted at end of yr 5
   const totalEquityValue = pv + pvTerminal + (netCash || 0)
   const intrinsicValue = totalEquityValue / sharesOutstanding
   return { projectedFCF, pvFCF: pv, terminalValue, pvTerminal, totalEquityValue, intrinsicValue }
@@ -244,11 +249,17 @@ export default function DCF({ investments }) {
     setLoading(true); setError(null); setData(null)
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
-      if (cached[s]) { setData(cached[s]); setSymbol(s); setLoading(false); return }
+      if (cached[s]) {
+        // Ignore cache if it contains mock data (annual length === 5 and first date is 2020-06-30 = MSFT mock)
+        const isMock = s === 'MSFT' && cached[s]?.annual?.[0]?.date === '2020-06-30'
+        if (!isMock) { setData(cached[s]); setSymbol(s); setLoading(false); return }
+      }
     } catch {}
-    if (s === 'MSFT') { setData(MOCK_FINANCIALS); setSymbol(s); setLoading(false); return }
     const apiKey = localStorage.getItem('bt_av_key') || ''
-    if (!apiKey) { setError('no_key'); setLoading(false); return }
+    if (!apiKey) {
+      if (s === 'MSFT') { setData(MOCK_FINANCIALS); setSymbol(s); setLoading(false); return }
+      setError('no_key'); setLoading(false); return
+    }
     try {
       const result = await fetchFinancials(s, apiKey)
       try {
@@ -268,10 +279,31 @@ export default function DCF({ investments }) {
     const annual = data.annual || []
     if (annual.length === 0) return null
     const recentAnnual = [...annual].reverse().slice(0, 3)
-    const validFCFs = recentAnnual.map(r => r.freeCF).filter(v => v != null)
-    const baseFCF = validFCFs.length > 0 ? validFCFs.reduce((a, b) => a + b, 0) / validFCFs.length : null
-    const latest = recentAnnual[0]
-    const netCash = latest ? (latest.cashAndShortTerm ?? latest.cash ?? 0) - (latest.longTermDebt ?? 0) : 0
+
+    // TTM: sum last 4 quarters if available and more recent than latest annual
+    const quarterly = (data.quarterly || []).slice().reverse()  // newest first
+    const last4Q = quarterly.slice(0, 4)
+    const ttmFCFValid = last4Q.length === 4 && last4Q.every(q => q.freeCF != null)
+    const ttmFCF = ttmFCFValid ? last4Q.reduce((s, q) => s + q.freeCF, 0) : null
+    // Only use TTM if most recent quarter is newer than most recent annual
+    const latestAnnualDate = recentAnnual[0]?.date ?? ''
+    const latestQuarterDate = last4Q[0]?.date ?? ''
+    const useTTM = ttmFCF != null && latestQuarterDate > latestAnnualDate
+
+    const baseFCF = useTTM
+      ? ttmFCF
+      : (recentAnnual.map(r => r.freeCF).filter(v => v != null).reduce((a, b) => a + b, 0) /
+         recentAnnual.filter(r => r.freeCF != null).length || null)
+    const baseFCFLabel = useTTM
+      ? `TTM (${last4Q[last4Q.length - 1]?.date?.slice(0,7)} – ${latestQuarterDate?.slice(0,7)})`
+      : '3yr annual avg'
+
+    // Use most recent quarter's balance sheet for net cash if available
+    const latestBS = useTTM ? last4Q[0] : recentAnnual[0]
+    const netCash = latestBS
+      ? (latestBS.cashAndShortTerm ?? latestBS.cash ?? 0) - (latestBS.longTermDebt ?? 0)
+      : 0
+
     const validForGrowth = [...annual].filter(r => r.freeCF != null && r.freeCF > 0)
     let impliedGrowth = null
     if (validForGrowth.length >= 2) {
@@ -281,7 +313,7 @@ export default function DCF({ investments }) {
     }
     const inv = investments.find(i => i.symbol === symbol && i.status === 'open')
     const currentPrice = parseFloat(inv?.currentPrice) || parseFloat(inv?.avgCost) || null
-    return { baseFCF, netCash, impliedGrowth, currentPrice, annualData: recentAnnual, allAnnual: annual }
+    return { baseFCF, baseFCFLabel, useTTM, netCash, impliedGrowth, currentPrice, annualData: recentAnnual, allAnnual: annual }
   }, [data, symbol, investments])
 
   useEffect(() => {
@@ -380,7 +412,7 @@ export default function DCF({ investments }) {
                     <p className="text-slate-400 mt-0.5"><strong className="text-green-400">Net Cash = Cash &amp; Investments − Long-term Debt.</strong> A company sitting on a pile of cash is worth more per share than one with heavy debt. This gets added directly to the equity value before dividing by shares outstanding.</p>
                   </div>
                   <div>
-                    <p className="text-slate-100 font-semibold">Intrinsic Value per Share</p>
+                    <p className="text-slate-100 font-semibold">Fair Value per Share</p>
                     <p className="text-slate-400 mt-0.5">The total equity value (PV of FCFs + PV of terminal value + net cash) divided by shares outstanding. This is what the model says one share is <em>worth</em> — compare it to the current market price.</p>
                   </div>
                   <div>
@@ -409,18 +441,15 @@ export default function DCF({ investments }) {
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Discounted Cash Flow Valuation</h2>
           <p className="text-xs text-slate-600 mt-0.5">Estimate what a stock is intrinsically worth based on its future free cash flows</p>
         </div>
-        <button onClick={() => setShowInfo(true)}
-          className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1.5 rounded-lg transition-colors">
-          <Info size={13} /> Full guide
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowInfo(true)}
+            className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1.5 rounded-lg transition-colors">
+            <Info size={13} /> Full guide
+          </button>
+        </div>
       </div>
 
-      {/* ── What is DCF callout (always visible) ─────────────── */}
-      <div className="bg-slate-800/50 border border-slate-700/60 rounded-xl p-4 text-xs text-slate-400 leading-relaxed">
-        <span className="text-slate-200 font-semibold">How it works: </span>
-        We project the company's Free Cash Flow (operating cash − capex) forward 5 years using your growth assumption, then estimate all future cash flows beyond that with a terminal value. Each year's cash flow is discounted back to today's dollars using your required rate of return. The sum, plus net cash on the balance sheet, divided by shares outstanding = intrinsic value per share.
-        <button onClick={() => setShowInfo(true)} className="ml-1.5 text-blue-400 hover:text-blue-300 underline underline-offset-2">Read the full guide →</button>
-      </div>
+
 
       {/* ── Symbol picker ─────────────────────────────────────── */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 p-4">
@@ -484,8 +513,8 @@ export default function DCF({ investments }) {
               <div className="space-y-2.5 text-xs border-b border-slate-700 pb-4">
                 <div className="flex justify-between items-center gap-2">
                   <span className="text-slate-500 flex items-center shrink-0">
-                    Base FCF (3yr avg)
-                    <Tip text="Free Cash Flow = Operating Cash Flow minus Capital Expenditures. We average the last 3 years to smooth out one-time items. Override if you want to use a different figure. Supports shorthand: 10B, 1.5M, 500K." />
+                    Base FCF <span className="ml-1 text-[10px] text-slate-600">({derived.baseFCFLabel})</span>
+                    <Tip text="Free Cash Flow = Operating Cash Flow minus Capital Expenditures. Uses TTM (last 4 quarters) when quarterly data is more recent than the latest annual report — otherwise falls back to 3-year annual average. Override if you want to use a different figure. Supports shorthand: 10B, 1.5M, 500K." />
                   </span>
                   <BigInput
                     value={effectiveBaseFCF}
@@ -601,7 +630,7 @@ export default function DCF({ investments }) {
                     </div>
                     <div className="bg-slate-900 rounded-lg p-3">
                       <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5 flex items-center gap-1">
-                        Intrinsic Value
+                        Fair Value
                         <Tip text="What one share is worth according to this model: (PV of FCFs + PV Terminal Value + Net Cash) ÷ Shares Outstanding. Compare to the current market price." />
                       </p>
                       <p className="text-lg font-bold text-green-400 tabular-nums">{fmtUSD(dcfResult.intrinsicValue)}</p>
@@ -669,6 +698,117 @@ export default function DCF({ investments }) {
                   {!effectiveShares ? 'Enter shares outstanding above to see the valuation.' : 'Insufficient FCF data to run DCF — company may have negative FCF history.'}
                 </div>
               )}
+
+              {/* ── Math Breakdown ───────────────────────────────── */}
+              {dcfResult && (() => {
+                const r = discountRate / 100
+                const g = growthRate / 100
+                const gt = terminalRate / 100
+                return (
+                  <div className="bg-slate-800 rounded-xl border border-slate-700 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Step-by-Step Math</p>
+
+                    {/* Inputs used */}
+                    <div className="bg-slate-900/60 rounded-lg p-3 mb-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div><span className="text-slate-500">Base FCF</span><p className="font-mono text-slate-200 font-semibold">{fmtB(effectiveBaseFCF)}</p></div>
+                      <div><span className="text-slate-500">Growth (g)</span><p className="font-mono text-slate-200 font-semibold">{growthRate}%</p></div>
+                      <div><span className="text-slate-500">Discount (r)</span><p className="font-mono text-slate-200 font-semibold">{discountRate}%</p></div>
+                      <div><span className="text-slate-500">Terminal (gₜ)</span><p className="font-mono text-slate-200 font-semibold">{terminalRate}%</p></div>
+                    </div>
+
+                    {/* Year-by-year FCF table */}
+                    <div className="overflow-x-auto mb-3">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-700">
+                            <th className="text-left py-1.5 pr-3 text-slate-500 font-semibold whitespace-nowrap">Year</th>
+                            <th className="text-right py-1.5 px-2 text-slate-500 font-semibold whitespace-nowrap">
+                              Projected FCF
+                              <Tip text={`BaseFCF × (1 + g)^t = ${fmtB(effectiveBaseFCF)} × (1 + ${growthRate}%)^t`} />
+                            </th>
+                            <th className="text-right py-1.5 px-2 text-slate-500 font-semibold whitespace-nowrap">
+                              Discount Factor
+                              <Tip text="Mid-year convention: 1 ÷ (1+r)^(t−0.5). Cash is assumed to arrive mid-year, not at year-end — gives a slightly higher PV and matches professional models." />
+                            </th>
+                            <th className="text-right py-1.5 pl-2 text-blue-400 font-semibold whitespace-nowrap">PV of FCF</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700/40">
+                          {dcfResult.projectedFCF.map((row, i) => {
+                            const t = i + 1
+                            const factor = 1 / Math.pow(1 + r, t - 0.5)
+                            return (
+                              <tr key={t} className="hover:bg-slate-700/20">
+                                <td className="py-1.5 pr-3 text-slate-400">Year {t}</td>
+                                <td className="py-1.5 px-2 font-mono text-slate-300 text-right">{fmtB(row.fcf)}</td>
+                                <td className="py-1.5 px-2 font-mono text-slate-500 text-right">÷ {(1/factor).toFixed(4)}</td>
+                                <td className="py-1.5 pl-2 font-mono text-blue-400 text-right font-semibold">{fmtB(row.discounted)}</td>
+                              </tr>
+                            )
+                          })}
+                          <tr className="border-t border-slate-600">
+                            <td colSpan={3} className="py-1.5 pr-3 text-slate-400 font-semibold">Sum PV of FCFs</td>
+                            <td className="py-1.5 pl-2 font-mono text-blue-400 text-right font-bold">{fmtB(dcfResult.pvFCF)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Terminal value working */}
+                    <div className="bg-slate-900/60 rounded-lg p-3 text-xs space-y-1.5 mb-3">
+                      <p className="text-slate-400 font-semibold mb-1">Terminal Value Calculation</p>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Year 5 FCF</span>
+                        <span className="font-mono text-slate-300">{fmtB(effectiveBaseFCF * Math.pow(1 + g, 5))}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Terminal formula <span className="text-slate-600">(FCF₅ × (1+gₜ)) ÷ (r − gₜ)</span></span>
+                        <span className="font-mono text-slate-300">
+                          ({fmtB(effectiveBaseFCF * Math.pow(1 + g, 5))} × {(1+gt).toFixed(3)}) ÷ ({discountRate}% − {terminalRate}%)
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Terminal Value (undiscounted)</span>
+                        <span className="font-mono text-violet-300">{fmtB(dcfResult.terminalValue)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Discounted at t=5 <span className="text-slate-600">÷ (1+r)⁵</span></span>
+                        <span className="font-mono text-violet-400 font-semibold">{fmtB(dcfResult.pvTerminal)}</span>
+                      </div>
+                    </div>
+
+                    {/* Final roll-up */}
+                    <div className="border-t border-slate-700 pt-3 text-xs space-y-1.5">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">PV of FCFs (Yr 1–5)</span>
+                        <span className="font-mono text-blue-400">{fmtB(dcfResult.pvFCF)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">PV of Terminal Value</span>
+                        <span className="font-mono text-violet-400">+ {fmtB(dcfResult.pvTerminal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Net Cash / (Debt)</span>
+                        <span className={`font-mono ${effectiveNetCash >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {effectiveNetCash >= 0 ? '+ ' : '− '}{fmtB(Math.abs(effectiveNetCash))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-slate-700 pt-1.5">
+                        <span className="text-slate-400 font-semibold">Total Equity Value</span>
+                        <span className="font-mono text-slate-200 font-semibold">{fmtB(dcfResult.totalEquityValue)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">÷ Shares Outstanding</span>
+                        <span className="font-mono text-slate-400">{fmtB(effectiveShares).replace('$','')}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-slate-700 pt-1.5">
+                        <span className="text-green-400 font-bold">Fair Value / Share</span>
+                        <span className="font-mono text-green-400 font-bold text-sm">{fmtUSD(dcfResult.intrinsicValue)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* FCF Chart */}
               <div className="bg-slate-800 rounded-xl border border-slate-700 p-4">

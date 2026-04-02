@@ -97,8 +97,7 @@ function ParamEditor({
                         Asset Parameters
                     </p>
                     <p className="text-xs text-slate-600 mt-0.5">
-                        Override estimated annual expected return and volatility
-                        per asset.
+                        Return &amp; volatility from <span className="text-slate-500">2 yrs of weekly price history</span> (Yahoo Finance). Click to override.
                     </p>
                 </div>
                 <button
