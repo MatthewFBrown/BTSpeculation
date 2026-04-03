@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { fetchFinancials } from '../../utils/fetchFinancials'
 import { MOCK_FINANCIALS } from '../../utils/mockFinancials'
-import { RefreshCw, AlertTriangle, KeyRound, Search, X } from 'lucide-react'
+import { RefreshCw, AlertTriangle, Search, X } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
@@ -191,8 +191,6 @@ export default function Financials({ investments, preloadSymbol }) {
   const [input, setInput]           = useState('')
   const [extraSymbols, setExtraSymbols] = useState([])
 
-  const apiKey = localStorage.getItem('bt_av_key') || ''
-
   // Persist fetched data in localStorage so page refreshes don't cost API calls
   const CACHE_KEY = 'bt_financials_cache'
   const TS_KEY    = 'bt_financials_ts'
@@ -229,31 +227,29 @@ export default function Financials({ investments, preloadSymbol }) {
   }
 
   const load = useCallback(async (sym) => {
-    if (!apiKey) { setError('no_key'); return }
-    if (cache[sym]) return          // already in localStorage cache
+    if (cache[sym]) return
     setLoading(true)
     setError(null)
     try {
-      const result = await fetchFinancials(sym, apiKey)
+      const result = await fetchFinancials(sym)
       updateCache(sym, result)
     } catch (e) {
       setError(e.message)
     }
     setLoading(false)
-  }, [apiKey, cache])  // eslint-disable-line
+  }, [cache])  // eslint-disable-line
 
   const reload = useCallback(async (sym) => {
-    if (!apiKey) return
     setLoading(true)
     setError(null)
     try {
-      const result = await fetchFinancials(sym, apiKey)
+      const result = await fetchFinancials(sym)
       updateCache(sym, result)
     } catch (e) {
       setError(e.message)
     }
     setLoading(false)
-  }, [apiKey])  // eslint-disable-line
+  }, [])
 
   function select(sym) { setSelected(sym) }
 
@@ -262,19 +258,6 @@ export default function Financials({ investments, preloadSymbol }) {
     if (preloadSymbol) setSelected(preloadSymbol)
   }, [preloadSymbol])
 
-  if (!apiKey || error === 'no_key') {
-    return (
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-8 text-center space-y-3">
-        <KeyRound size={28} className="text-slate-500 mx-auto" />
-        <p className="text-slate-300 font-medium">Alpha Vantage API Key Required</p>
-        <p className="text-sm text-slate-500">
-          Enter your free Alpha Vantage key using the key icon in the header.
-          Get one free at <span className="text-blue-400">alphavantage.co</span> — 25 requests/day.
-        </p>
-        <p className="text-xs text-slate-600">Covers income statement, balance sheet &amp; cash flow for US and international stocks.</p>
-      </div>
-    )
-  }
 
   const d       = cache[selected]
   const periods = d ? (freq === 'annual' ? d.annual : d.quarterly) : []

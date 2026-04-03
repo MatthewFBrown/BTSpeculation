@@ -605,8 +605,7 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
   const [finLoading, setFinLoading] = useState({})
   const [finLoaded, setFinLoaded]   = useState({})
 
-  const apiKey   = localStorage.getItem('bt_finnhub_key') || ''
-  const avApiKey = localStorage.getItem('bt_av_key') || ''
+  const apiKey = localStorage.getItem('bt_finnhub_key') || ''
   const FIN_CACHE_KEY = 'bt_financials_cache'
 
   // Load symbol sent from Watchlist
@@ -664,16 +663,15 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
   }
 
   const loadFinancials = useCallback(async (sym) => {
-    if (!avApiKey) return
     setFinLoading(prev => ({ ...prev, [sym]: true }))
     try {
-      const result = await fetchFinancials(sym, avApiKey)
+      const result = await fetchFinancials(sym)
       const existing = JSON.parse(localStorage.getItem(FIN_CACHE_KEY) || '{}')
       localStorage.setItem(FIN_CACHE_KEY, JSON.stringify({ ...existing, [sym]: result }))
       setFinLoaded(prev => ({ ...prev, [sym]: true }))
     } catch {}
     setFinLoading(prev => ({ ...prev, [sym]: false }))
-  }, [avApiKey])
+  }, [])
 
   // Seed finLoaded from existing cache on mount
   useEffect(() => {
@@ -794,17 +792,15 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
       {view === 'single' && selected && dataMap[selected] && (
         <div>
           <div className="flex justify-end gap-2 mb-3">
-            {avApiKey && (
-              <button
-                onClick={() => loadFinancials(selected)}
-                disabled={finLoading[selected]}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border disabled:opacity-50 transition-colors bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200"
-                title="Fetch Alpha Vantage financials for this symbol and cache them for the Financials tab"
-              >
-                <DatabaseZap size={12} className={finLoading[selected] ? 'animate-pulse' : ''} />
-                {finLoading[selected] ? 'Loading…' : finLoaded[selected] ? 'Financials ✓' : 'Load Financials'}
-              </button>
-            )}
+            <button
+              onClick={() => loadFinancials(selected)}
+              disabled={finLoading[selected]}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border disabled:opacity-50 transition-colors bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200"
+              title="Fetch financials from SEC EDGAR for this symbol"
+            >
+              <DatabaseZap size={12} className={finLoading[selected] ? 'animate-pulse' : ''} />
+              {finLoading[selected] ? 'Loading…' : finLoaded[selected] ? 'Financials ✓' : 'Load Financials'}
+            </button>
             <button onClick={() => reload(selected)} disabled={loading[selected]}
               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg disabled:opacity-50">
               <RefreshCw size={12} className={loading[selected] ? 'animate-spin' : ''} />
