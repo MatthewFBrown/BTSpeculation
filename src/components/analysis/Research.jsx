@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { fetchFundamentals } from '../../utils/fetchFundamentals'
 import { fetchFinancials } from '../../utils/fetchFinancials'
 import { fmtInv } from '../../utils/investmentCalcs'
-import { Search, X, RefreshCw, KeyRound, AlertTriangle, LayoutList, Columns, ExternalLink, ChevronDown, ChevronUp, DatabaseZap, Globe, TrendingUp } from 'lucide-react'
+import { Search, X, RefreshCw, KeyRound, AlertTriangle, LayoutList, Columns, ExternalLink, ChevronDown, ChevronUp, DatabaseZap, Globe, TrendingUp, TrendingDown } from 'lucide-react'
 import { getCorrelationMatrixForSymbols, setRealCorrelations, setComputedParams } from '../../utils/efficientFrontier'
 import { fetchCorrelations } from '../../utils/fetchCorrelations'
 import FrontierPanel from './FrontierPanel'
@@ -469,7 +469,7 @@ function PortfolioContext({ investments, loadedSymbols, dataMap, cash = 0, efRes
 }
 
 // ── Sector Browser ────────────────────────────────────────────
-function SectorBrowser({ onAdd, onSendToOptimizer }) {
+function SectorBrowser({ onAdd, onSendToOptimizer, onSendToRisk, loadedSymbols = [] }) {
   const [open, setOpen]           = useState(false)
   const [activeSector, setActiveSector] = useState(SECTORS[0].id)
   const [selected, setSelected]   = useState(new Set())
@@ -556,12 +556,27 @@ function SectorBrowser({ onAdd, onSendToOptimizer }) {
                   Clear
                 </button>
               )}
+              {onSendToRisk && (
+                <button
+                  onClick={() => { onSendToRisk([...selected]); setSelected(new Set()) }}
+                  disabled={selected.size < 2}
+                  className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-xs font-medium transition-colors">
+                  <TrendingDown size={12} /> Send to Risk
+                </button>
+              )}
               {onSendToOptimizer && (
                 <button
-                  onClick={() => { onSendToOptimizer([...selected]); setSelected(new Set()) }}
-                  disabled={selected.size < 2}
+                  onClick={() => {
+                    const merged = [...new Set([...loadedSymbols, ...selected])]
+                    onSendToOptimizer(merged)
+                    setSelected(new Set())
+                  }}
+                  disabled={selected.size === 0 && loadedSymbols.length === 0}
                   className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-xs font-medium transition-colors">
                   <TrendingUp size={12} /> Send to Optimizer
+                  {loadedSymbols.length > 0 && selected.size > 0 && (
+                    <span className="text-[10px] bg-violet-500/40 px-1 rounded">+{loadedSymbols.length} loaded</span>
+                  )}
                 </button>
               )}
               <button
@@ -579,7 +594,7 @@ function SectorBrowser({ onAdd, onSendToOptimizer }) {
 }
 
 // ── Main Component ────────────────────────────────────────────
-export default function Research({ preloadSymbol, investments = [], cash = 0, efResearchParamsKey = 'bt_ef_research_params', onSendToOptimizer }) {
+export default function Research({ preloadSymbol, investments = [], cash = 0, efResearchParamsKey = 'bt_ef_research_params', onSendToOptimizer, onSendToRisk }) {
   const [input, setInput]           = useState('')
   const [symbols, setSymbols]       = useState([])
   const [dataMap, setDataMap]       = useState({})
@@ -686,6 +701,8 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
       <SectorBrowser
         onAdd={syms => { syms.forEach(s => loadSymbol(s)); setView('compare') }}
         onSendToOptimizer={onSendToOptimizer}
+        onSendToRisk={onSendToRisk}
+        loadedSymbols={symbols}
       />
 
       {/* Search bar */}

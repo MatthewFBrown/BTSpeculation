@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts'
-import { getPortfolioRiskMetrics, getRiskContribution, getCorrelationMatrix, getStressTests } from '../../utils/efficientFrontier'
+import { getPortfolioRiskMetrics, getRiskContribution, getCorrelationMatrix, getCorrelationMatrixForSymbols, getStressTests } from '../../utils/efficientFrontier'
 import { fmtInv } from '../../utils/investmentCalcs'
 import { ShieldAlert, TrendingDown, Activity, AlertTriangle, ChevronDown, ChevronRight, Info, X } from 'lucide-react'
 
@@ -255,8 +255,10 @@ function RiskContribution({ investments }) {
 }
 
 // ── Correlation Matrix ────────────────────────────────────────
-function CorrelationMatrix({ investments, corrVersion }) {  // eslint-disable-line no-unused-vars
-  const { symbols, matrix } = getCorrelationMatrix(investments)
+function CorrelationMatrix({ investments, corrVersion, overrideSymbols }) {  // eslint-disable-line no-unused-vars
+  const { symbols, matrix } = overrideSymbols
+    ? getCorrelationMatrixForSymbols(overrideSymbols)
+    : getCorrelationMatrix(investments)
   const [info, setInfo] = useState(false)
   if (!symbols.length) return null
 
@@ -357,14 +359,28 @@ function CorrelationMatrix({ investments, corrVersion }) {  // eslint-disable-li
 }
 
 // ── Main Component ────────────────────────────────────────────
-export default function RiskAnalysis({ investments, cash = 0, corrVersion = 0 }) {
+export default function RiskAnalysis({ investments, cash = 0, corrVersion = 0, incomingSymbols = null, onClearIncoming }) {
   const m = getPortfolioRiskMetrics(investments)
   const totalPortfolio = m ? m.totalMV + cash : cash
   const [heroInfo, setHeroInfo]  = useState(false)
   const [concInfo, setConcInfo]  = useState(false)
   const [stopInfo, setStopInfo]  = useState(false)
 
-  if (!m) return <div className="text-center text-slate-500 py-16 text-sm">No open positions to analyse.</div>
+  if (!m && !incomingSymbols) return <div className="text-center text-slate-500 py-16 text-sm">No open positions to analyse.</div>
+
+  // Sector browser view — just show correlation matrix for those symbols
+  if (!m && incomingSymbols) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2 text-xs text-orange-300">
+          <ShieldAlert size={13} />
+          <span>Showing correlation for sector browser selection. Portfolio risk metrics require active positions.</span>
+          <button onClick={onClearIncoming} className="ml-auto text-orange-400 hover:text-orange-200"><X size={12} /></button>
+        </div>
+        <CorrelationMatrix investments={investments} corrVersion={corrVersion} overrideSymbols={incomingSymbols} />
+      </div>
+    )
+  }
 
   const betaColor = m.weightedBeta > 1.5 ? 'text-red-400' : m.weightedBeta > 1.1 ? 'text-yellow-400' : m.weightedBeta < 0.8 ? 'text-blue-400' : 'text-green-400'
   const divColor  = m.diversificationScore > 70 ? 'text-green-400' : m.diversificationScore > 50 ? 'text-yellow-400' : 'text-red-400'
@@ -546,7 +562,18 @@ export default function RiskAnalysis({ investments, cash = 0, corrVersion = 0 })
       <RiskContribution investments={investments} />
 
       {/* Correlation Matrix */}
-      <CorrelationMatrix investments={investments} corrVersion={corrVersion} />
+      {incomingSymbols ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2 text-xs text-orange-300">
+            <ShieldAlert size={13} />
+            <span>Correlation for sector browser selection ({incomingSymbols.join(', ')})</span>
+            <button onClick={onClearIncoming} className="ml-auto text-orange-400 hover:text-orange-200"><X size={12} /></button>
+          </div>
+          <CorrelationMatrix investments={investments} corrVersion={corrVersion} overrideSymbols={incomingSymbols} />
+        </div>
+      ) : (
+        <CorrelationMatrix investments={investments} corrVersion={corrVersion} />
+      )}
 
       <p className="text-xs text-slate-600 text-center">
         All metrics use estimated historical parameters. Not financial advice.

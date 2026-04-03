@@ -25,6 +25,7 @@ export default function AnalysisDashboard({ investments, cash = 0, watchlistNav,
   const [financialsSymbol, setFinancialsSymbol] = useState(null)
   const [corrVersion, setCorrVersion]           = useState(0)
   const [optimizerSymbols, setOptimizerSymbols] = useState(null)
+  const [riskSymbols, setRiskSymbols]           = useState(null)
 
   // Fetch real correlations for open portfolio positions
   useEffect(() => {
@@ -68,11 +69,11 @@ export default function AnalysisDashboard({ investments, cash = 0, watchlistNav,
 
       {tab === 'fundamentals' && <Fundamentals investments={investments} />}
       {tab === 'financials'   && <Financials         investments={investments} preloadSymbol={financialsSymbol} />}
-      {tab === 'research'     && <Research           investments={investments} cash={cash} preloadSymbol={researchSymbol} efResearchParamsKey={efResearchParamsKey} onSendToOptimizer={syms => { setOptimizerSymbols(syms); setTab('optimizer') }} />}
+      {tab === 'research'     && <Research           investments={investments} cash={cash} preloadSymbol={researchSymbol} efResearchParamsKey={efResearchParamsKey} onSendToOptimizer={syms => { setOptimizerSymbols(syms); setTab('optimizer') }} onSendToRisk={syms => { setRiskSymbols(syms); setTab('risk') }} />}
       {tab === 'dcf'          && <DCF                 investments={investments} />}
       {tab === 'frontier'     && <EfficientFrontier   investments={investments} cash={cash} storageKey={efParamsKey} />}
       {tab === 'optimizer'    && <PortfolioOptimizer  investments={investments} corrVersion={corrVersion} incomingSymbols={optimizerSymbols} onClearIncoming={() => setOptimizerSymbols(null)} />}
-      {tab === 'risk'         && <RiskAnalysis        investments={investments} cash={cash} corrVersion={corrVersion} />}
+      {tab === 'risk'         && <RiskAnalysis        investments={investments} cash={cash} corrVersion={corrVersion} incomingSymbols={riskSymbols} onClearIncoming={() => setRiskSymbols(null)} />}
     </div>
   )
 }

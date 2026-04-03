@@ -31,7 +31,6 @@ export default function InvestmentCharts({ investments }) {
   const byType = getAllocationByType(investments)
   const bySector = getAllocationBySector(investments)
   const performance = getPositionPerformance(investments)
-
   const total = byType.reduce((a, b) => a + b.value, 0)
 
   return (

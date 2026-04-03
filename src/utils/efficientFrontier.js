@@ -125,7 +125,7 @@ export function generateEfficientFrontierData(investments, paramsOverride = {}, 
   const open = investments.filter(i =>
     i.status === 'open' && parseFloat(i.shares) > 0 && parseFloat(i.avgCost) > 0
   )
-  if (open.length < 2) return { frontier: [], current: null, minVol: null, maxSharpe: null }
+  if (open.length < 2) return { frontier: [], current: null, maxDiv: null, maxSharpe: null }
 
   const stockSymbols = open.map(i => i.symbol)
   const mvs = open.map(i => (parseFloat(i.shares) || 0) * (parseFloat(i.currentPrice) || parseFloat(i.avgCost) || 0))
@@ -147,16 +147,19 @@ export function generateEfficientFrontierData(investments, paramsOverride = {}, 
   })
 
   const all = []
-  let minVolPt = null, maxSharpePt = null
-  let minVolWeights = null, maxSharpeWeights = null
+  let maxDivPt = null, maxSharpePt = null
+  let maxDivWeights = null, maxSharpeWeights = null
 
   for (let k = 0; k < 10000; k++) {
     const w = randomWeights(symbols.length)
     const { ret, vol, sharpe } = portfolioStats(symbols, w, paramsArr)
+    // Diversification Ratio = weighted avg of individual vols / portfolio vol
+    const weightedAvgVol = w.reduce((acc, wi, i) => acc + wi * paramsArr[i].s, 0)
+    const divRatio = vol > 0 ? weightedAvgVol / vol : 0
     // store weights on every point so extractFrontier can propagate them
-    const pt = { ret: +(ret * 100).toFixed(2), vol: +(vol * 100).toFixed(2), sharpe: +sharpe.toFixed(3), _w: w }
+    const pt = { ret: +(ret * 100).toFixed(2), vol: +(vol * 100).toFixed(2), sharpe: +sharpe.toFixed(3), divRatio: +divRatio.toFixed(3), _w: w }
     all.push(pt)
-    if (!minVolPt || pt.vol < minVolPt.vol) { minVolPt = pt; minVolWeights = w }
+    if (!maxDivPt || pt.divRatio > maxDivPt.divRatio) { maxDivPt = pt; maxDivWeights = w }
     if (!maxSharpePt || pt.sharpe > maxSharpePt.sharpe) { maxSharpePt = pt; maxSharpeWeights = w }
   }
 
@@ -183,7 +186,7 @@ export function generateEfficientFrontierData(investments, paramsOverride = {}, 
   return {
     frontier,
     current,
-    minVol:    minVolPt    ? { ...minVolPt,    allocation: buildAllocation(minVolWeights) }    : null,
+    maxDiv:    maxDivPt    ? { ...maxDivPt,    allocation: buildAllocation(maxDivWeights) }    : null,
     maxSharpe: maxSharpePt ? { ...maxSharpePt, allocation: buildAllocation(maxSharpeWeights) } : null,
   }
 }
@@ -280,7 +283,7 @@ export function generateCombinedFrontierData(portfolioInvestments, extraSymbols 
     i.status === 'open' && parseFloat(i.shares) > 0 && parseFloat(i.avgCost) > 0
   )
   if (open.length === 0 || extraSymbols.length === 0)
-    return { frontier: [], current: null, minVol: null, maxSharpe: null, portSymbols: [], newSymbols: [] }
+    return { frontier: [], current: null, maxDiv: null, maxSharpe: null, portSymbols: [], newSymbols: [] }
 
   const portSymbols = open.map(i => i.symbol)
   const newSymbols  = extraSymbols.filter(s => !portSymbols.includes(s))
@@ -288,7 +291,7 @@ export function generateCombinedFrontierData(portfolioInvestments, extraSymbols 
   // CASH goes at the end, treated as a portfolio symbol (not "new")
   const allSymbols  = [...portSymbols, ...newSymbols, ...(hasCash ? ['CASH'] : [])]
   if (allSymbols.length < 2)
-    return { frontier: [], current: null, minVol: null, maxSharpe: null, portSymbols, newSymbols }
+    return { frontier: [], current: null, maxDiv: null, maxSharpe: null, portSymbols, newSymbols }
 
   const mvs         = open.map(i => (parseFloat(i.shares) || 0) * (parseFloat(i.currentPrice) || parseFloat(i.avgCost) || 0))
   const stockTotalMV = mvs.reduce((a, b) => a + b, 0)
@@ -304,15 +307,17 @@ export function generateCombinedFrontierData(portfolioInvestments, extraSymbols 
   })
 
   const all = []
-  let minVolPt = null, maxSharpePt = null
-  let minVolWeights = null, maxSharpeWeights = null
+  let maxDivPt = null, maxSharpePt = null
+  let maxDivWeights = null, maxSharpeWeights = null
 
   for (let k = 0; k < 10000; k++) {
     const w = randomWeights(allSymbols.length)
     const { ret, vol, sharpe } = portfolioStats(allSymbols, w, paramsArr)
-    const pt = { ret: +(ret * 100).toFixed(2), vol: +(vol * 100).toFixed(2), sharpe: +sharpe.toFixed(3), _w: w }
+    const weightedAvgVol = w.reduce((acc, wi, i) => acc + wi * paramsArr[i].s, 0)
+    const divRatio = vol > 0 ? weightedAvgVol / vol : 0
+    const pt = { ret: +(ret * 100).toFixed(2), vol: +(vol * 100).toFixed(2), sharpe: +sharpe.toFixed(3), divRatio: +divRatio.toFixed(3), _w: w }
     all.push(pt)
-    if (!minVolPt    || pt.vol    < minVolPt.vol)    { minVolPt    = pt; minVolWeights    = w }
+    if (!maxDivPt || pt.divRatio > maxDivPt.divRatio) { maxDivPt = pt; maxDivWeights = w }
     if (!maxSharpePt || pt.sharpe > maxSharpePt.sharpe) { maxSharpePt = pt; maxSharpeWeights = w }
   }
 
@@ -338,7 +343,7 @@ export function generateCombinedFrontierData(portfolioInvestments, extraSymbols 
   return {
     frontier,
     current,
-    minVol:    minVolPt    ? { ...minVolPt,    allocation: buildAllocation(minVolWeights) }    : null,
+    maxDiv:    maxDivPt    ? { ...maxDivPt,    allocation: buildAllocation(maxDivWeights) }    : null,
     maxSharpe: maxSharpePt ? { ...maxSharpePt, allocation: buildAllocation(maxSharpeWeights) } : null,
     portSymbols: hasCash ? [...portSymbols, 'CASH'] : portSymbols,
     newSymbols,

@@ -262,10 +262,6 @@ export default function Financials({ investments, preloadSymbol }) {
     if (preloadSymbol) setSelected(preloadSymbol)
   }, [preloadSymbol])
 
-  if (open.length === 0) {
-    return <div className="text-center text-slate-500 py-16 text-sm">No open positions to analyse.</div>
-  }
-
   if (!apiKey || error === 'no_key') {
     return (
       <div className="bg-slate-800 rounded-xl border border-slate-700 p-8 text-center space-y-3">
@@ -332,7 +328,7 @@ export default function Financials({ investments, preloadSymbol }) {
             <button onClick={() => select(sym)}>{sym}</button>
             <button onClick={() => {
               setExtraSymbols(prev => prev.filter(s => s !== sym))
-              if (selected === sym) select(open[0]?.symbol || '')
+              if (selected === sym) select(open[0]?.symbol || extraSymbols.find(s => s !== sym) || '')
             }} className="ml-0.5 opacity-50 hover:opacity-100">
               <X size={11} />
             </button>

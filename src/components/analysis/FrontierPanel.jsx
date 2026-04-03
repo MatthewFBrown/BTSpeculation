@@ -47,11 +47,11 @@ const PORTFOLIO_COLORS = {
         label: "Your Portfolio",
         note: "Current allocation",
     },
-    minVol: {
+    maxDiv: {
         dot: "#38bdf8",
         accent: "border-t-sky-500",
-        label: "Min Volatility",
-        note: "Lowest risk",
+        label: "Max Diversification",
+        note: "Best correlation spread",
     },
     maxSharpe: {
         dot: "#a78bfa",
@@ -489,7 +489,7 @@ function FrontierTooltip({
 // ── Comparison / Rebalancing Table ────────────────────────────
 function ComparisonTable({
     current,
-    minVol,
+    maxDiv,
     maxSharpe,
     investments,
     portSymbols,
@@ -638,10 +638,10 @@ function ComparisonTable({
                         <th className="text-right px-3 py-2.5 text-yellow-500/60 font-semibold uppercase tracking-wider">
                             Shares
                         </th>
-                        {minVol && (
+                        {maxDiv && (
                             <>
                                 <th className="text-right px-3 py-2.5 text-sky-400 font-semibold uppercase tracking-wider">
-                                    Min Vol %
+                                    Max Div %
                                 </th>
                                 <th className="text-right px-3 py-2.5 text-sky-400/60 font-semibold uppercase tracking-wider">
                                     Action
@@ -663,7 +663,7 @@ function ComparisonTable({
                 <tbody>
                     {symbols.map((sym, i) => {
                         const isNew = portSymbols && !portSymbols.includes(sym);
-                        const mv = minVol ? changes(minVol, sym) : null;
+                        const mv = maxDiv ? changes(maxDiv, sym) : null;
                         const ms = maxSharpe ? changes(maxSharpe, sym) : null;
                         return (
                             <tr
@@ -718,10 +718,10 @@ function ComparisonTable({
                                         "—"
                                     )}
                                 </td>
-                                {minVol && (
+                                {maxDiv && (
                                     <>
                                         <td className="px-3 py-3 text-right tabular-nums text-sky-400 font-medium">
-                                            {getWeight(minVol, sym).toFixed(1)}%
+                                            {getWeight(maxDiv, sym).toFixed(1)}%
                                         </td>
                                         <td className="px-3 py-3 text-right">
                                             {actionCell(mv, sym)}
@@ -804,7 +804,7 @@ export default function FrontierPanel({
         [cashAmount, cashRate],
     ); // eslint-disable-line
 
-    const { frontier, current, minVol, maxSharpe, portSymbols, newSymbols } =
+    const { frontier, current, maxDiv, maxSharpe, portSymbols, newSymbols } =
         useMemo(() => {
             if (isCombined)
                 return generateCombinedFrontierData(
@@ -1052,16 +1052,16 @@ export default function FrontierPanel({
                             }}
                             activeDot={{ r: 5 }}
                         />
-                        {minVol && (
+                        {maxDiv && (
                             <ReferenceDot
-                                x={minVol.vol}
-                                y={minVol.ret}
+                                x={maxDiv.vol}
+                                y={maxDiv.ret}
                                 r={9}
                                 fill="#38bdf8"
                                 stroke="#1e293b"
                                 strokeWidth={2}
                                 label={{
-                                    value: "Min Vol",
+                                    value: "Max Div",
                                     position: "top",
                                     fill: "#38bdf8",
                                     fontSize: 10,
@@ -1116,7 +1116,7 @@ export default function FrontierPanel({
                     </div>
                     {[
                         ["#f59e0b", "Your Portfolio"],
-                        ["#38bdf8", "Min Volatility"],
+                        ["#38bdf8", "Max Diversification"],
                         ["#a78bfa", "Max Sharpe"],
                     ].map(([c, l]) => (
                         <div key={l} className="flex items-center gap-1.5">
@@ -1168,8 +1168,8 @@ export default function FrontierPanel({
 
             {/* Three portfolio cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {["current", "minVol", "maxSharpe"].map((key) => {
-                    const pt = { current, minVol, maxSharpe }[key];
+                {["current", "maxDiv", "maxSharpe"].map((key) => {
+                    const pt = { current, maxDiv, maxSharpe }[key];
                     if (!pt) return null;
                     const { dot, accent, label, note } = PORTFOLIO_COLORS[key];
                     return (
@@ -1227,7 +1227,7 @@ export default function FrontierPanel({
             {/* Rebalancing table */}
             <ComparisonTable
                 current={current}
-                minVol={minVol}
+                maxDiv={maxDiv}
                 maxSharpe={maxSharpe}
                 investments={investments}
                 portSymbols={portSymbols}

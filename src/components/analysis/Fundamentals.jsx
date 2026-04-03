@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { fetchFundamentals } from '../../utils/fetchFundamentals'
 import { fmtInv } from '../../utils/investmentCalcs'
-import { RefreshCw, ExternalLink, AlertTriangle, KeyRound, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { RefreshCw, ExternalLink, AlertTriangle, KeyRound, TrendingUp, TrendingDown, Minus, Search, X } from 'lucide-react'
 
 const fmt = (v, suffix = '', decimals = 2) =>
   v == null || isNaN(v) ? '—' : `${Number(v).toFixed(decimals)}${suffix}`
@@ -116,6 +116,8 @@ export default function Fundamentals({ investments }) {
   const [data, setData] = useState({})      // symbol → fetched data
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [input, setInput] = useState('')
+  const [extraSymbols, setExtraSymbols] = useState([])
 
   const apiKey = localStorage.getItem('bt_finnhub_key') || ''
 
@@ -156,8 +158,6 @@ export default function Fundamentals({ investments }) {
     load(selected)
   }
 
-  if (open.length === 0) return <div className="text-center text-slate-500 py-16 text-sm">No open positions to analyse.</div>
-
   if (!apiKey || error === 'no_key') {
     return (
       <div className="bg-slate-800 rounded-xl border border-slate-700 p-8 text-center space-y-3">
@@ -170,12 +170,37 @@ export default function Fundamentals({ investments }) {
   }
 
   const d = data[selected]
-  const inv = open.find(i => i.symbol === selected)
+  const inv = open.find(i => i.symbol === selected) ?? null
 
   return (
     <div className="space-y-4">
       {/* Symbol selector row */}
       <div className="flex flex-wrap gap-2 items-center">
+        <form onSubmit={e => {
+          e.preventDefault()
+          const sym = input.trim().toUpperCase()
+          if (!sym) return
+          if (!open.find(i => i.symbol === sym) && !extraSymbols.includes(sym))
+            setExtraSymbols(prev => [...prev, sym])
+          select(sym)
+          load(sym)
+          setInput('')
+        }} className="flex gap-1.5">
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value.toUpperCase())}
+              placeholder="Search ticker…"
+              className="bg-slate-800 border border-slate-700 rounded-lg pl-7 pr-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-blue-500 placeholder:text-slate-600 font-mono w-32"
+            />
+          </div>
+          <button type="submit" disabled={!input.trim()}
+            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+            Go
+          </button>
+        </form>
+
         {open.map(i => (
           <button key={i.symbol}
             onClick={() => select(i.symbol)}
@@ -187,6 +212,23 @@ export default function Fundamentals({ investments }) {
             {i.symbol}
           </button>
         ))}
+
+        {extraSymbols.map(sym => (
+          <div key={sym} className={`flex items-center gap-1 pl-3 pr-1.5 py-1.5 rounded-lg border text-sm font-semibold transition-colors ${
+            selected === sym
+              ? 'bg-blue-600 border-blue-500 text-white'
+              : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+          }`}>
+            <button onClick={() => { select(sym); load(sym) }}>{sym}</button>
+            <button onClick={() => {
+              setExtraSymbols(prev => prev.filter(s => s !== sym))
+              if (selected === sym) select(open[0]?.symbol || extraSymbols.find(s => s !== sym) || '')
+            }} className="ml-0.5 opacity-50 hover:opacity-100">
+              <X size={11} />
+            </button>
+          </div>
+        ))}
+
         {selected && (
           <button onClick={() => reload(selected)} disabled={loading}
             className="ml-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg disabled:opacity-50">
