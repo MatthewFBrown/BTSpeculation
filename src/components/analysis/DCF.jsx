@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { fetchFinancials } from '../../utils/fetchFinancials'
 import { MOCK_FINANCIALS } from '../../utils/mockFinancials'
-import { Search, Info, X, AlertTriangle, HelpCircle } from 'lucide-react'
+import { Search, Info, X, AlertTriangle, KeyRound, HelpCircle } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   ReferenceLine, CartesianGrid,
@@ -255,8 +255,13 @@ export default function DCF({ investments }) {
         if (!isMock) { setData(cached[s]); setSymbol(s); setLoading(false); return }
       }
     } catch {}
+    const apiKey = localStorage.getItem('bt_av_key') || ''
+    if (!apiKey) {
+      if (s === 'MSFT') { setData(MOCK_FINANCIALS); setSymbol(s); setLoading(false); return }
+      setError('no_key'); setLoading(false); return
+    }
     try {
-      const result = await fetchFinancials(s)
+      const result = await fetchFinancials(s, apiKey)
       try {
         const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
         cached[s] = result
@@ -474,7 +479,16 @@ export default function DCF({ investments }) {
       </div>
 
       {/* ── Errors ───────────────────────────────────────────── */}
-      {error && (
+      {error === 'no_key' && (
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 flex items-start gap-3">
+          <KeyRound size={16} className="text-yellow-400 shrink-0 mt-0.5" />
+          <div className="text-sm text-yellow-200/80">
+            Alpha Vantage API key required. Add it via the <span className="text-yellow-300 font-medium">key icon</span> in the header.
+            If you've already viewed this stock in the <span className="text-yellow-300 font-medium">Financials tab</span>, it's already cached — no key needed.
+          </div>
+        </div>
+      )}
+      {error && error !== 'no_key' && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
           <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
           <p className="text-sm text-red-300">{error}</p>

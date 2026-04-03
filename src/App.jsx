@@ -31,7 +31,6 @@ import TickerTape, { openWatchlistModal } from "./components/TickerTape";
 import { SEED_TRADES } from "./utils/seedData";
 import { SEED_INVESTMENTS } from "./utils/seedInvestments";
 import { fetchAllPrices } from "./utils/fetchPrices";
-import { getAVCallStats } from "./utils/avCallTracker";
 
 export default function App() {
     const {
@@ -807,48 +806,9 @@ export default function App() {
                             </div>
                             <div className="border-t border-slate-700" />
                             <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                                        Alpha Vantage
-                                    </p>
-                                    {(() => {
-                                        const { count, limit, remaining } =
-                                            getAVCallStats();
-                                        const pct = (count / limit) * 100;
-                                        const color =
-                                            remaining === 0
-                                                ? "text-red-400"
-                                                : remaining <= 5
-                                                  ? "text-yellow-400"
-                                                  : "text-green-400";
-                                        const barColor =
-                                            remaining === 0
-                                                ? "bg-red-500"
-                                                : remaining <= 5
-                                                  ? "bg-yellow-500"
-                                                  : "bg-green-500";
-                                        return (
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-20 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                                    <div
-                                                        className={`h-full ${barColor} transition-all`}
-                                                        style={{
-                                                            width: `${pct}%`,
-                                                        }}
-                                                    />
-                                                </div>
-                                                <span
-                                                    className={`text-xs font-mono font-semibold ${color}`}
-                                                >
-                                                    {count}/{limit}
-                                                </span>
-                                                <span className="text-[10px] text-slate-600">
-                                                    today
-                                                </span>
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                                    Alpha Vantage
+                                </p>
                                 <p className="text-xs text-slate-500 mb-2">
                                     Financial Statements tab — free at{" "}
                                     <span className="text-blue-400">

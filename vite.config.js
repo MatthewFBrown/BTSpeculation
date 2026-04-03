@@ -10,6 +10,7 @@ export default defineConfig({
         target: 'https://query2.finance.yahoo.com',
         changeOrigin: true,
         rewrite: path => path.replace(/^\/yahoo-proxy/, ''),
+        cookieDomainRewrite: '*',
       },
     },
   },
