@@ -3,7 +3,14 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(npx tailwindcss:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(grep -n \"options\\\\|Options\\\\|option\\\\|Option\" /c/code/Github/BTSpeculation/src/components/analysis/*.jsx)",
+      "Bash(grep -n \"type.*option\\\\|option.*type\" /c/code/Github/BTSpeculation/src/utils/*.js)",
+      "Bash(wc -l /c/code/Github/BTSpeculation/src/components/analysis/*.jsx)",
+      "Bash(npx vite:*)",
+      "Bash(start chrome:*)",
+      "WebSearch",
+      "Bash(npm audit:*)"
     ]
   }
 }
