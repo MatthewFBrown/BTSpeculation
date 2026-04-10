@@ -594,7 +594,7 @@ function SectorBrowser({ onAdd, onSendToOptimizer, onSendToRisk, loadedSymbols =
 }
 
 // ── Main Component ────────────────────────────────────────────
-export default function Research({ preloadSymbol, investments = [], cash = 0, efResearchParamsKey = 'bt_ef_research_params', onSendToOptimizer, onSendToRisk }) {
+export default function Research({ preloadSymbol, preloadCompareSymbols, onClearCompareSymbols, investments = [], cash = 0, efResearchParamsKey = 'bt_ef_research_params', onSendToOptimizer, onSendToRisk }) {
   const [input, setInput]           = useState('')
   const [symbols, setSymbols]       = useState([])
   const [dataMap, setDataMap]       = useState({})
@@ -614,12 +614,27 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
     if (preloadSymbol) loadSymbol(preloadSymbol)
   }, [preloadSymbol]) // eslint-disable-line
 
+  // Load symbols sent from Fundamentals (compare multiple)
+  useEffect(() => {
+    if (!preloadCompareSymbols || preloadCompareSymbols.length === 0) return
+    // Deduplicate and reset symbols array
+    const unique = [...new Set(preloadCompareSymbols)]
+    setSymbols(unique)
+    setDataMap({})
+    setLoading({})
+    // Load each symbol
+    unique.forEach(sym => loadSymbol(sym))
+    setView('compare')
+    onClearCompareSymbols?.()
+  }, [preloadCompareSymbols]) // eslint-disable-line
+
   const loadSymbol = useCallback(async (raw) => {
     const sym = raw.trim().toUpperCase()
     if (!sym || !apiKey) return
     if (dataMap[sym]) { setSelected(sym); return }
     if (loading[sym]) return   // already in-flight, don't double-load
-    if (!symbols.includes(sym)) setSymbols(prev => [...prev, sym])
+    // Only add to symbols if it's not already there (for manual searches)
+    setSymbols(prev => prev.includes(sym) ? prev : [...prev, sym])
     setSelected(sym)
     setLoading(prev => ({ ...prev, [sym]: true }))
     setErrors(prev => { const n = { ...prev }; delete n[sym]; return n })
@@ -630,7 +645,7 @@ export default function Research({ preloadSymbol, investments = [], cash = 0, ef
       setErrors(prev => ({ ...prev, [sym]: e.message }))
     }
     setLoading(prev => ({ ...prev, [sym]: false }))
-  }, [apiKey, dataMap, symbols])
+  }, [apiKey, dataMap])
 
   const reload = useCallback(async (sym) => {
     setLoading(prev => ({ ...prev, [sym]: true }))

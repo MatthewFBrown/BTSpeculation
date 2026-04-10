@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react'
-import { fetchFundamentals } from '../../utils/fetchFundamentals'
+import { useState, useCallback, useEffect } from 'react'
+import { fetchFundamentals, fetchPeers } from '../../utils/fetchFundamentals'
 import { fmtInv } from '../../utils/investmentCalcs'
-import { RefreshCw, ExternalLink, AlertTriangle, KeyRound, TrendingUp, TrendingDown, Minus, Search, X } from 'lucide-react'
+import { RefreshCw, ExternalLink, AlertTriangle, KeyRound, Search, X, Zap } from 'lucide-react'
 import { KNOWN_ETFS, ETFCard } from './ETFCard'
+import { getEarningsHistory } from '../../utils/valuationScore'
 
 const fmt = (v, suffix = '', decimals = 2) =>
   v == null || isNaN(v) ? '—' : `${Number(v).toFixed(decimals)}${suffix}`
@@ -111,10 +112,11 @@ function NewsItem({ item }) {
   )
 }
 
-export default function Fundamentals({ investments }) {
+export default function Fundamentals({ investments, onSendToCompare }) {
   const open = investments.filter(i => i.status === 'open')
   const [selected, setSelected] = useState(open[0]?.symbol || '')
   const [data, setData] = useState({})      // symbol → fetched data
+  const [peers, setPeers] = useState([])    // similar stocks
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [input, setInput] = useState('')
@@ -151,6 +153,7 @@ export default function Fundamentals({ investments }) {
 
   function select(sym) {
     setSelected(sym)
+    setPeers([])
     if (!KNOWN_ETFS[sym]) load(sym)
   }
 
@@ -158,6 +161,12 @@ export default function Fundamentals({ investments }) {
   if (selected && !data[selected] && !loading && apiKey && error !== 'no_key' && !KNOWN_ETFS[selected]) {
     load(selected)
   }
+
+  // Fetch peers when symbol changes
+  useEffect(() => {
+    if (!selected || !apiKey || KNOWN_ETFS[selected]) return
+    fetchPeers(selected, apiKey).then(setPeers).catch(() => setPeers([]))
+  }, [selected, apiKey])
 
   if (!apiKey || error === 'no_key') {
     return (
@@ -309,6 +318,46 @@ export default function Fundamentals({ investments }) {
             </div>
           )}
 
+          {/* Similar stocks / peers */}
+          {peers.length > 0 && (() => {
+            const allSymbols = new Set([...open.map(i => i.symbol), ...extraSymbols, selected])
+            const uniquePeers = peers.filter(p => !allSymbols.has(p))
+            return uniquePeers.length > 0 ? (
+              <div className="bg-slate-800/50 backdrop-blur-md rounded-lg ring-1 ring-white/[0.08] p-4 border-t-2 border-t-purple-500">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">Similar Stocks (Peers)</p>
+                  {onSendToCompare && (
+                    <button
+                      onClick={() => {
+                        const toSend = [selected, ...uniquePeers]
+                        const unique = [...new Set(toSend)]
+                        onSendToCompare(unique)
+                      }}
+                      className="flex items-center gap-1.5 text-xs bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1.5 rounded-lg font-medium transition-colors">
+                      <Zap size={12} />
+                      Compare All
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {uniquePeers.slice(0, 8).map(sym => (
+                    <button
+                      key={sym}
+                      onClick={() => select(sym)}
+                      className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-slate-100 px-2.5 py-1.5 rounded-lg transition-colors">
+                      {sym}
+                    </button>
+                  ))}
+                  {uniquePeers.length > 8 && (
+                    <div className="text-xs text-slate-500 px-2.5 py-1.5">
+                      +{uniquePeers.length - 8} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null
+          })()}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Valuation */}
             <Panel title="Valuation" accent="border-t-blue-500">
@@ -393,6 +442,42 @@ export default function Fundamentals({ investments }) {
               </Panel>
             )}
           </div>
+
+          {/* Earnings History */}
+          {(() => {
+            const history = getEarningsHistory(d.earnings)
+            return history.length > 0 ? (
+              <div className="bg-slate-800/50 backdrop-blur-md rounded-lg ring-1 ring-white/[0.08] p-5 border-t-2 border-t-cyan-500">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400 mb-4">Earnings History</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-700">
+                        <th className="text-left py-2 px-2 text-slate-400 font-semibold">Quarter</th>
+                        <th className="text-right py-2 px-2 text-slate-400 font-semibold">Actual EPS</th>
+                        <th className="text-right py-2 px-2 text-slate-400 font-semibold">Estimated</th>
+                        <th className="text-right py-2 px-2 text-slate-400 font-semibold">Surprise</th>
+                        <th className="text-left py-2 px-2 text-slate-400 font-semibold">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.map((e, idx) => (
+                        <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                          <td className="py-2 px-2 font-medium text-slate-300">{e.quarter}</td>
+                          <td className="py-2 px-2 text-right text-slate-200 font-semibold">${e.actual}</td>
+                          <td className="py-2 px-2 text-right text-slate-500">${e.estimate}</td>
+                          <td className={`py-2 px-2 text-right font-semibold ${e.surprise == null ? 'text-slate-500' : e.surprise >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {e.surprise != null ? `${e.surprise >= 0 ? '+' : ''}${e.surprise}%` : '—'}
+                          </td>
+                          <td className="py-2 px-2 text-slate-500 text-[9px]">{e.period}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null
+          })()}
 
           {/* News */}
           {d.news?.length > 0 && (
