@@ -5,66 +5,67 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 function Hero({ s }) {
     const pnlUp = s.totalPnL >= 0;
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-slate-700 rounded-xl overflow-hidden border border-slate-700 mb-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
             {/* Net P&L */}
-            <div className="bg-slate-800 p-3 sm:p-5">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">
+            <div className={`bg-slate-800/50 hover:bg-slate-800/70 backdrop-blur-md rounded-lg p-4 sm:p-6 ring-1 ring-white/[0.08] border-t-2 transition-all duration-200 ${pnlUp ? "border-emerald-500" : "border-red-500"}`}>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400 mb-2">
                     Net P&L
                 </p>
                 <p
-                    className={`text-xl sm:text-3xl font-bold tabular-nums tracking-tight ${pnlUp ? "text-green-400" : "text-red-400"}`}
+                    className={`text-2xl sm:text-4xl font-bold tabular-nums tracking-tight ${pnlUp ? "text-emerald-400" : "text-red-400"}`}
                 >
                     {fmtFull(s.totalPnL)}
                 </p>
-                <p className="text-xs text-slate-500 mt-2">
-                    Gross {fmtFull(s.totalGross)} · Fees {fmtFull(s.totalFees)}
+                <p className="text-xs text-slate-500 mt-3 space-y-0.5">
+                    <div>Gross {fmtFull(s.totalGross)}</div>
+                    <div>Fees {fmtFull(s.totalFees)}</div>
                 </p>
             </div>
             {/* Win Rate */}
-            <div className="bg-slate-800 p-3 sm:p-5">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">
+            <div className={`bg-slate-800/50 hover:bg-slate-800/70 backdrop-blur-md rounded-lg p-4 sm:p-6 ring-1 ring-white/[0.08] border-t-2 transition-all duration-200 ${s.totalTrades > 0 && s.winRate >= 50 ? "border-emerald-500" : s.totalTrades > 0 ? "border-red-500" : "border-slate-600"}`}>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400 mb-2">
                     Win Rate
                 </p>
                 <p
-                    className={`text-xl sm:text-3xl font-bold tabular-nums tracking-tight ${s.winRate >= 50 ? "text-green-400" : "text-red-400"}`}
+                    className={`text-2xl sm:text-4xl font-bold tabular-nums tracking-tight ${s.winRate >= 50 ? "text-emerald-400" : "text-red-400"}`}
                 >
                     {s.totalTrades > 0 ? `${s.winRate.toFixed(1)}%` : "—"}
                 </p>
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="text-xs text-slate-500 mt-3">
                     {s.wins}W · {s.losses}L · {s.totalTrades} closed
                 </p>
             </div>
             {/* Profit Factor */}
-            <div className="bg-slate-800 p-3 sm:p-5">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">
+            <div className="bg-slate-800/50 hover:bg-slate-800/70 backdrop-blur-md rounded-lg p-4 sm:p-6 ring-1 ring-white/[0.08] border-t-2 border-amber-500 transition-all duration-200">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400 mb-2">
                     Profit Factor
                 </p>
                 <p
-                    className={`text-xl sm:text-3xl font-bold tabular-nums tracking-tight ${s.profitFactor >= 1.5 ? "text-green-400" : s.profitFactor >= 1 ? "text-yellow-400" : "text-red-400"}`}
+                    className={`text-2xl sm:text-4xl font-bold tabular-nums tracking-tight ${s.profitFactor >= 1.5 ? "text-emerald-400" : s.profitFactor >= 1 ? "text-amber-400" : "text-red-400"}`}
                 >
                     {s.profitFactor > 0 ? s.profitFactor.toFixed(2) : "—"}
                 </p>
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="text-xs text-slate-500 mt-3">
                     {s.profitFactor >= 1.5
                         ? "Strong edge"
                         : s.profitFactor >= 1
                           ? "Marginal edge"
                           : s.profitFactor > 0
                             ? "No edge"
-                            : "No closed trades"}
+                            : "No data"}
                 </p>
             </div>
             {/* Expectancy */}
-            <div className="bg-slate-800 p-3 sm:p-5">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">
+            <div className="bg-slate-800/50 hover:bg-slate-800/70 backdrop-blur-md rounded-lg p-4 sm:p-6 ring-1 ring-white/[0.08] border-t-2 border-blue-500 transition-all duration-200">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400 mb-2">
                     Expectancy
                 </p>
                 <p
-                    className={`text-xl sm:text-3xl font-bold tabular-nums tracking-tight ${s.expectancy >= 0 ? "text-green-400" : "text-red-400"}`}
+                    className={`text-2xl sm:text-4xl font-bold tabular-nums tracking-tight ${s.expectancy >= 0 ? "text-emerald-400" : "text-red-400"}`}
                 >
                     {s.totalTrades > 0 ? fmtFull(s.expectancy) : "—"}
                 </p>
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="text-xs text-slate-500 mt-3">
                     expected per trade
                 </p>
             </div>
@@ -74,10 +75,10 @@ function Hero({ s }) {
 
 function MetricRow({ label, value, color = "text-slate-200", sub }) {
     return (
-        <div className="flex items-center justify-between py-2.5 border-b border-slate-700/60 last:border-0">
-            <span className="text-sm text-slate-400">{label}</span>
+        <div className="flex items-center justify-between py-3 border-b border-white/[0.05] last:border-0">
+            <span className="text-sm text-slate-400 font-medium">{label}</span>
             <div className="text-right">
-                <span className={`text-sm font-semibold tabular-nums ${color}`}>
+                <span className={`text-sm font-bold tabular-nums ${color}`}>
                     {value}
                 </span>
                 {sub && (
@@ -91,14 +92,14 @@ function MetricRow({ label, value, color = "text-slate-200", sub }) {
 function MetricGroup({ title, accent, children, hidden = false }) {
     return (
         <div
-            className={`bg-slate-800 rounded-xl border border-slate-700 border-t-2 ${accent} overflow-hidden ${hidden ? 'hidden md:block' : ''}`}
+            className={`bg-slate-800/50 backdrop-blur-md rounded-lg ring-1 ring-white/[0.08] border-t-2 ${accent} overflow-hidden ${hidden ? 'hidden md:block' : ''} hover:bg-slate-800/60 transition-colors duration-200`}
         >
-            <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-1">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1">
+            <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">
                     {title}
                 </p>
             </div>
-            <div className="px-3 sm:px-4 pb-3">{children}</div>
+            <div className="px-4 sm:px-5 pb-4">{children}</div>
         </div>
     );
 }

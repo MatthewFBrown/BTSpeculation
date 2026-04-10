@@ -39,7 +39,7 @@ async function fetchStock(symbol, apiKey) {
 // Returns { symbol: price, ... } for all open positions
 // Skips closed. Skips anything without a price returned.
 export async function fetchAllPrices(investments, finnhubKey, onProgress) {
-  const open = investments.filter(i => i.status === 'open')
+  const open = investments.filter(i => i.status === 'open' && i.assetType !== 'Option')
   const cryptoSymbols = open.filter(i => COINGECKO_IDS[i.symbol?.toUpperCase()]).map(i => i.symbol)
   const stockSymbols  = open.filter(i => !COINGECKO_IDS[i.symbol?.toUpperCase()]).map(i => i.symbol)
 

@@ -5,8 +5,8 @@ async function get(func, symbol, apiKey) {
   if (!res.ok) throw new Error(`Alpha Vantage ${func} failed (${res.status})`)
   const data = await res.json()
   if (data['Error Message']) throw new Error(data['Error Message'])
-  if (data['Note'] || data['Information'])
-    throw new Error('Alpha Vantage rate limit reached (25 req/day on free tier). Try again tomorrow.')
+  if (data['Note'])        throw new Error(`Alpha Vantage: ${data['Note']}`)
+  if (data['Information']) throw new Error(`Alpha Vantage: ${data['Information']}`)
   return data
 }
 
@@ -69,13 +69,15 @@ function parseReports(income, balance, cash, isAnnual) {
   })
 }
 
+const delay = (ms) => new Promise(r => setTimeout(r, ms))
+
 export async function fetchFinancials(symbol, apiKey) {
   const sym = symbol.toUpperCase()
-  const [income, balance, cash] = await Promise.all([
-    get('INCOME_STATEMENT', sym, apiKey),
-    get('BALANCE_SHEET',    sym, apiKey),
-    get('CASH_FLOW',        sym, apiKey),
-  ])
+  const income  = await get('INCOME_STATEMENT', sym, apiKey)
+  await delay(1100)
+  const balance = await get('BALANCE_SHEET', sym, apiKey)
+  await delay(1100)
+  const cash    = await get('CASH_FLOW', sym, apiKey)
   return {
     annual:    parseReports(income, balance, cash, true),
     quarterly: parseReports(income, balance, cash, false),

@@ -4,7 +4,7 @@ export const SECTORS = [
   'Real Estate', 'Utilities', 'Communication Services', 'Crypto', 'ETF / Index', 'Other',
 ]
 
-export const ASSET_TYPES = ['Stock', 'ETF', 'Crypto', 'Bond', 'Other']
+export const ASSET_TYPES = ['Stock', 'ETF', 'Crypto', 'Bond', 'Option', 'Other']
 
 export function calcInvestmentPnL(inv) {
   const shares = parseFloat(inv.shares)

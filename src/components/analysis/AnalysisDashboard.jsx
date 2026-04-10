@@ -6,6 +6,7 @@ import Financials from './Financials'
 import Research from './Research'
 import DCF from './DCF'
 import PortfolioOptimizer from './PortfolioOptimizer'
+import WheelTracker from './WheelTracker'
 import { fetchCorrelations } from '../../utils/fetchCorrelations'
 import { setRealCorrelations, setComputedParams } from '../../utils/efficientFrontier'
 
@@ -17,9 +18,10 @@ const TABS = [
   { id: 'frontier',     label: 'Efficient Frontier' },
   { id: 'optimizer',    label: 'Optimizer' },
   { id: 'risk',         label: 'Risk' },
+  { id: 'wheel',        label: 'Wheel' },
 ]
 
-export default function AnalysisDashboard({ investments, cash = 0, watchlistNav, onWatchlistNavConsumed, efParamsKey = 'bt_ef_params', efResearchParamsKey = 'bt_ef_research_params' }) {
+export default function AnalysisDashboard({ investments, trades = [], cash = 0, watchlistNav, onWatchlistNavConsumed, efParamsKey = 'bt_ef_params', efResearchParamsKey = 'bt_ef_research_params' }) {
   const [tab, setTab] = useState('fundamentals')
   const [researchSymbol,   setResearchSymbol]   = useState(null)
   const [financialsSymbol, setFinancialsSymbol] = useState(null)
@@ -51,15 +53,15 @@ export default function AnalysisDashboard({ investments, cash = 0, watchlistNav,
 
   return (
     <div>
-      <div className="flex gap-1 mb-4 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 border-b border-white/[0.05]">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`shrink-0 px-4 py-2.5 rounded-t-lg text-sm font-semibold transition-all duration-200 border-b-2 ${
               tab === t.id
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'
+                ? 'bg-blue-500/20 text-blue-300 border-b-blue-500'
+                : 'text-slate-400 border-b-transparent hover:text-slate-300 hover:bg-white/[0.03]'
             }`}
           >
             {t.label}
@@ -74,6 +76,7 @@ export default function AnalysisDashboard({ investments, cash = 0, watchlistNav,
       {tab === 'frontier'     && <EfficientFrontier   investments={investments} cash={cash} storageKey={efParamsKey} />}
       {tab === 'optimizer'    && <PortfolioOptimizer  investments={investments} corrVersion={corrVersion} incomingSymbols={optimizerSymbols} onClearIncoming={() => setOptimizerSymbols(null)} />}
       {tab === 'risk'         && <RiskAnalysis        investments={investments} cash={cash} corrVersion={corrVersion} incomingSymbols={riskSymbols} onClearIncoming={() => setRiskSymbols(null)} />}
+      {tab === 'wheel'        && <WheelTracker        trades={trades} investments={investments} />}
     </div>
   )
 }

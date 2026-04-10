@@ -17,6 +17,11 @@ const EMPTY = {
   targetPrice: '',
   chartLink: '',
   notes: '',
+  // Option-specific fields
+  optionType: 'put',
+  optionDirection: 'short',
+  strike: '',
+  expiry: '',
 }
 
 export default function InvestmentForm({ onAdd, onClose, initialInv }) {
@@ -75,6 +80,38 @@ export default function InvestmentForm({ onAdd, onClose, initialInv }) {
               </div>
             </div>
 
+            {/* Option-specific fields */}
+            {form.assetType === 'Option' && (
+              <>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1">
+                    <label className={labelCls}>Put / Call</label>
+                    <select className={inputCls} value={form.optionType} onChange={e => set('optionType', e.target.value)}>
+                      <option value="put">Put</option>
+                      <option value="call">Call</option>
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className={labelCls}>Direction</label>
+                    <select className={inputCls} value={form.optionDirection} onChange={e => set('optionDirection', e.target.value)}>
+                      <option value="short">Short (sell)</option>
+                      <option value="long">Long (buy)</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1">
+                    <label className={labelCls}>Strike ($)</label>
+                    <input type="number" step="0.01" className={inputCls} placeholder="150.00" value={form.strike} onChange={e => set('strike', e.target.value)} />
+                  </div>
+                  <div className="flex-1">
+                    <label className={labelCls}>Expiry Date</label>
+                    <input type="date" className={inputCls} value={form.expiry} onChange={e => set('expiry', e.target.value)} />
+                  </div>
+                </div>
+              </>
+            )}
+
             {/* Status */}
             <div>
               <label className={labelCls}>Status</label>
@@ -91,29 +128,32 @@ export default function InvestmentForm({ onAdd, onClose, initialInv }) {
             {/* Shares + Avg Cost */}
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
-                <label className={labelCls}>Shares / Units</label>
-                <input type="number" step="0.0001" min="0" className={inputCls} placeholder="10" value={form.shares} onChange={e => set('shares', e.target.value)} required />
+                <label className={labelCls}>{form.assetType === 'Option' ? 'Contracts' : 'Shares / Units'}</label>
+                <input type="number" step="0.0001" min="0" className={inputCls} placeholder={form.assetType === 'Option' ? '1' : '10'} value={form.shares} onChange={e => set('shares', e.target.value)} required />
               </div>
               <div className="flex-1">
-                <label className={labelCls}>Avg Cost / Unit ($)</label>
-                <input type="number" step="0.0001" min="0" className={inputCls} placeholder="150.00" value={form.avgCost} onChange={e => set('avgCost', e.target.value)} required />
+                <label className={labelCls}>{form.assetType === 'Option' ? 'Entry Premium / Share ($)' : 'Avg Cost / Unit ($)'}</label>
+                <input type="number" step="0.0001" min="0" className={inputCls} placeholder={form.assetType === 'Option' ? '2.50' : '150.00'} value={form.avgCost} onChange={e => set('avgCost', e.target.value)} required />
               </div>
             </div>
 
             {/* Current Price (open) or Sell Price (closed) */}
             {form.status === 'open' ? (
               <div>
-                <label className={labelCls}>Current Price ($) <span className="text-slate-500">update manually</span></label>
-                <input type="number" step="0.0001" min="0" className={inputCls} placeholder="175.00" value={form.currentPrice} onChange={e => set('currentPrice', e.target.value)} />
+                <label className={labelCls}>
+                  {form.assetType === 'Option' ? 'Current Premium / Share ($)' : 'Current Price ($)'}
+                  <span className="text-slate-500"> update manually</span>
+                </label>
+                <input type="number" step="0.0001" min="0" className={inputCls} placeholder={form.assetType === 'Option' ? '1.20' : '175.00'} value={form.currentPrice} onChange={e => set('currentPrice', e.target.value)} />
               </div>
             ) : (
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1">
-                  <label className={labelCls}>Sell Price ($)</label>
-                  <input type="number" step="0.0001" min="0" className={inputCls} placeholder="200.00" value={form.sellPrice} onChange={e => set('sellPrice', e.target.value)} required />
+                  <label className={labelCls}>{form.assetType === 'Option' ? 'Exit Premium / Share ($)' : 'Sell Price ($)'}</label>
+                  <input type="number" step="0.0001" min="0" className={inputCls} placeholder={form.assetType === 'Option' ? '0.00' : '200.00'} value={form.sellPrice} onChange={e => set('sellPrice', e.target.value)} required />
                 </div>
                 <div className="flex-1">
-                  <label className={labelCls}>Sell Date</label>
+                  <label className={labelCls}>{form.assetType === 'Option' ? 'Close Date' : 'Sell Date'}</label>
                   <input type="date" className={inputCls} value={form.sellDate} onChange={e => set('sellDate', e.target.value)} required />
                 </div>
               </div>

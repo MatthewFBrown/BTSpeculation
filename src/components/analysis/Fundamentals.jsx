@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { fetchFundamentals } from '../../utils/fetchFundamentals'
 import { fmtInv } from '../../utils/investmentCalcs'
 import { RefreshCw, ExternalLink, AlertTriangle, KeyRound, TrendingUp, TrendingDown, Minus, Search, X } from 'lucide-react'
+import { KNOWN_ETFS, ETFCard } from './ETFCard'
 
 const fmt = (v, suffix = '', decimals = 2) =>
   v == null || isNaN(v) ? '—' : `${Number(v).toFixed(decimals)}${suffix}`
@@ -150,11 +151,11 @@ export default function Fundamentals({ investments }) {
 
   function select(sym) {
     setSelected(sym)
-    load(sym)
+    if (!KNOWN_ETFS[sym]) load(sym)
   }
 
-  // Auto-load first symbol
-  if (selected && !data[selected] && !loading && apiKey && error !== 'no_key') {
+  // Auto-load first symbol (skip for known ETFs/indexes)
+  if (selected && !data[selected] && !loading && apiKey && error !== 'no_key' && !KNOWN_ETFS[selected]) {
     load(selected)
   }
 
@@ -183,7 +184,6 @@ export default function Fundamentals({ investments }) {
           if (!open.find(i => i.symbol === sym) && !extraSymbols.includes(sym))
             setExtraSymbols(prev => [...prev, sym])
           select(sym)
-          load(sym)
           setInput('')
         }} className="flex gap-1.5">
           <div className="relative">
@@ -219,7 +219,7 @@ export default function Fundamentals({ investments }) {
               ? 'bg-blue-600 border-blue-500 text-white'
               : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
           }`}>
-            <button onClick={() => { select(sym); load(sym) }}>{sym}</button>
+            <button onClick={() => select(sym)}>{sym}</button>
             <button onClick={() => {
               setExtraSymbols(prev => prev.filter(s => s !== sym))
               if (selected === sym) select(open[0]?.symbol || extraSymbols.find(s => s !== sym) || '')
@@ -248,7 +248,11 @@ export default function Fundamentals({ investments }) {
         <div className="text-center text-slate-500 py-16 text-sm animate-pulse">Loading data for {selected}…</div>
       )}
 
-      {d && (
+      {!loading && selected && KNOWN_ETFS[selected] && (
+        <ETFCard sym={selected} />
+      )}
+
+      {d && !KNOWN_ETFS[selected] && (
         <>
           {/* Company header */}
           <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 flex items-start gap-4">
