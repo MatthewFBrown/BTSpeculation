@@ -1,0 +1,29 @@
+{
+  "cash": 10000,
+  "wheelPositions": [
+    {
+      "ticker": "SOFI",
+      "type": "CSP",
+      "strike": 14.5,
+      "entry": "2026-04-8",
+      "expiry": "2026-04-17",
+      "premium": 0.13,
+      "contracts": 5
+    },
+    {
+      "ticker": "CELH",
+      "type": "CSP",
+      "strike": 31,
+      "entry": "2026-04-13",
+      "expiry": "2026-04-17",
+      "premium": 0.20,
+      "contracts": 2
+    }
+  ],
+  "stockPositions": [
+    
+  ],
+  "tradeLog": [
+    
+  ]
+}

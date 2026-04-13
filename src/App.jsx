@@ -11,6 +11,8 @@ import InvestmentTable from "./components/investments/InvestmentTable";
 import InvestmentCharts from "./components/investments/InvestmentCharts";
 import InvestmentForm from "./components/investments/InvestmentForm";
 import AnalysisDashboard from "./components/analysis/AnalysisDashboard";
+import MattCapital from "./components/fund/MattCapital";
+import { FUND_ACCESS_CODE } from "./utils/mattCapitalData";
 import {
     Plus,
     BarChart2,
@@ -52,7 +54,9 @@ export default function App() {
         loadInvestments,
     } = useInvestments(activeId);
 
-    const [section, setSection] = useState("investments"); // 'investments' | 'analysis' | 'trading'
+    const [section, setSection] = useState("investments"); // 'investments' | 'analysis' | 'trading' | 'fund'
+    const [fundCode, setFundCode] = useState(() => localStorage.getItem('bt_fund_code') || '')
+    const fundUnlocked = fundCode === FUND_ACCESS_CODE
     const [watchlistNav, setWatchlistNav] = useState(null);
     const [view, setView] = useState("trades");
     const [invView, setInvView] = useState("positions");
@@ -500,6 +504,14 @@ export default function App() {
                             >
                                 Day Trading
                             </button>
+                            {fundUnlocked && (
+                                <button
+                                    onClick={() => setSection("fund")}
+                                    className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${section === "fund" ? "bg-slate-600 text-slate-100" : "text-slate-400 hover:text-slate-200"}`}
+                                >
+                                    MATT Capital
+                                </button>
+                            )}
                         </div>
 
                         {/* Spacer */}
@@ -661,6 +673,18 @@ export default function App() {
                         >
                             Day Trading
                         </button>
+                        {fundUnlocked && (
+                            <button
+                                onClick={() => setSection("fund")}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium border-b-2 transition-colors ${
+                                    section === "fund"
+                                        ? "border-blue-500 text-blue-400"
+                                        : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600"
+                                }`}
+                            >
+                                MATT Capital
+                            </button>
+                        )}
                     </div>
                 </div>
             </header>
@@ -710,6 +734,8 @@ export default function App() {
                         )}
                     </>
                 )}
+
+                {section === "fund" && <MattCapital />}
 
                 {section === "analysis" && (
                     <AnalysisDashboard
@@ -844,6 +870,49 @@ export default function App() {
                                             localStorage.removeItem(
                                                 "bt_av_key",
                                             );
+                                        }}
+                                        className="mt-1 text-xs text-red-400 hover:text-red-300"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                            <div className="border-t border-slate-700" />
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                                    Fund Access Code
+                                </p>
+                                <p className="text-xs text-slate-500 mb-2">
+                                    Unlocks the MATT Capital tab
+                                </p>
+                                <form
+                                    onSubmit={(e) => {
+                                        e.preventDefault()
+                                        const val = e.target.code.value.trim()
+                                        setFundCode(val)
+                                        localStorage.setItem('bt_fund_code', val)
+                                    }}
+                                    className="flex gap-2"
+                                >
+                                    <input
+                                        name="code"
+                                        type="password"
+                                        defaultValue={fundCode}
+                                        placeholder="Enter access code…"
+                                        className={`flex-1 ${inputCls} font-mono text-sm`}
+                                    />
+                                    <button
+                                        type="submit"
+                                        className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-medium"
+                                    >
+                                        Save
+                                    </button>
+                                </form>
+                                {fundCode && (
+                                    <button
+                                        onClick={() => {
+                                            setFundCode('')
+                                            localStorage.removeItem('bt_fund_code')
                                         }}
                                         className="mt-1 text-xs text-red-400 hover:text-red-300"
                                     >
