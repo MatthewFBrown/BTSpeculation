@@ -5,6 +5,9 @@
       "Read(//c/Users/mfb03/.claude/**)",
       "Bash(curl -s \"https://finnhub.io/api/v1/stock/earnings-estimate?symbol=AAPL&token=$\\(grep -o 'bt_finnhub_key[^}]*' ~/.claude/settings.local.json)",
       "WebFetch(domain:finnhub.io)"
+    ],
+    "additionalDirectories": [
+      "c:\\code\\Github\\BTSpeculation\\docs\\superpowers"
     ]
   }
 }
