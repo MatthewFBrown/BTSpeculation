@@ -968,6 +968,11 @@ export default function MattCapital() {
     const [editWheelId, setEditWheelId] = useState(null);
     const [stockForm, setStockForm] = useState(null);
     const [editStockId, setEditStockId] = useState(null);
+    const [wheelLogModal, setWheelLogModal] = useState(null); // { position, logForm }
+    const [editingCash, setEditingCash] = useState(false);
+    const [cashInput, setCashInput] = useState("");
+    const [stockLogModal, setStockLogModal] = useState(null); // { position, logForm }
+
 
     // Load fund data from Supabase tables (or demo constant)
     useEffect(() => {
@@ -1024,10 +1029,44 @@ export default function MattCapital() {
         }
         setWheelForm(null); setEditWheelId(null);
     }
-    async function deleteWheel(id) {
-        if (demoMode || !confirm("Remove this wheel position?")) return;
-        await supabase.from("fund_wheel_positions").delete().eq("id", id);
-        setWheelPositions(prev => prev.filter(p => p.id !== id));
+    function deleteWheel(id) {
+        if (demoMode) return;
+        const p = wheelPositions.find(w => w.id === id);
+        if (!p) return;
+        setWheelLogModal({
+            position: p,
+            logForm: {
+                pnl: "",
+                closePrice: "",
+                result: "win",
+                exit: p.expiry || "",
+            },
+        });
+    }
+    async function confirmDeleteWheel(sendToLog) {
+        const { position: p, logForm } = wheelLogModal;
+        if (sendToLog) {
+            const row = {
+                ticker: p.ticker,
+                strategy: p.type,
+                strike: p.strike,
+                contracts: p.contracts,
+                avg_price: p.premium,
+                close_price: logForm.closePrice !== "" ? parseFloat(logForm.closePrice) : null,
+                entry: p.entry || null,
+                exit: logForm.exit || null,
+                pnl: parseFloat(logForm.pnl) || 0,
+                result: logForm.result,
+            };
+            const { data } = await supabase.from("fund_trade_log").insert(row).select().single();
+            if (data) {
+                const local = { ticker: row.ticker, strategy: row.strategy, strike: row.strike, contracts: row.contracts, avgPrice: row.avg_price, closePrice: row.close_price, entry: row.entry, exit: row.exit, pnl: row.pnl, result: row.result };
+                setTradeLog(prev => [...prev, { id: data.id, ...local }]);
+            }
+        }
+        await supabase.from("fund_wheel_positions").delete().eq("id", p.id);
+        setWheelPositions(prev => prev.filter(w => w.id !== p.id));
+        setWheelLogModal(null);
     }
 
     // ── Stock helpers ──────────────────────────────────────────────
@@ -1050,10 +1089,46 @@ export default function MattCapital() {
         }
         setStockForm(null); setEditStockId(null);
     }
-    async function deleteStock(id) {
-        if (demoMode || !confirm("Remove this stock position?")) return;
-        await supabase.from("fund_stock_positions").delete().eq("id", id);
-        setStockPositions(prev => prev.filter(p => p.id !== id));
+    function deleteStock(id) {
+        if (demoMode) return;
+        const p = stockPositions.find(s => s.id === id);
+        if (!p) return;
+        const current = prices[p.ticker];
+        const estPnl = current != null ? ((current - p.entryPrice) * p.shares).toFixed(2) : "";
+        setStockLogModal({
+            position: p,
+            logForm: {
+                exit: "",
+                closePrice: current != null ? String(current) : "",
+                pnl: estPnl,
+                result: estPnl !== "" ? (parseFloat(estPnl) >= 0 ? "win" : "loss") : "win",
+            },
+        });
+    }
+    async function confirmDeleteStock(sendToLog) {
+        const { position: p, logForm } = stockLogModal;
+        if (sendToLog) {
+            const row = {
+                ticker: p.ticker,
+                strategy: "Stock",
+                contracts: p.shares,
+                avg_price: p.entryPrice,
+                close_price: logForm.closePrice !== "" ? parseFloat(logForm.closePrice) : null,
+                entry: null,
+                exit: logForm.exit || null,
+                pnl: parseFloat(logForm.pnl) || 0,
+                result: logForm.result,
+                strike: null,
+            };
+            const { data } = await supabase.from("fund_trade_log").insert(row).select().single();
+            if (data) {
+                const local = { ticker: row.ticker, strategy: row.strategy, contracts: row.contracts, avgPrice: row.avg_price, closePrice: row.close_price, entry: row.entry, exit: row.exit, pnl: row.pnl, result: row.result, strike: null };
+                setTradeLog(prev => [...prev, { id: data.id, ...local }]);
+            }
+        }
+        await supabase.from("fund_stock_positions").delete().eq("id", p.id);
+        setStockPositions(prev => prev.filter(s => s.id !== p.id));
+        setStockLogModal(null);
     }
 
     // ── Trade helpers ──────────────────────────────────────────────
@@ -1089,6 +1164,19 @@ export default function MattCapital() {
         if (demoMode || !confirm("Delete this trade?")) return;
         await supabase.from("fund_trade_log").delete().eq("id", id);
         setTradeLog(prev => prev.filter(t => t.id !== id));
+    }
+
+    async function saveCash(val) {
+        const n = parseFloat(val) || 0;
+        setSettings(s => ({ ...s, cash: n }));
+        setEditingCash(false);
+        // upsert — fund_settings has at most one row
+        const { data: existing } = await supabase.from("fund_settings").select("id").maybeSingle();
+        if (existing) {
+            await supabase.from("fund_settings").update({ cash: n }).eq("id", existing.id);
+        } else {
+            await supabase.from("fund_settings").insert({ cash: n });
+        }
     }
 
     async function loadPrices() {
@@ -1229,75 +1317,51 @@ export default function MattCapital() {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-6">
                     {[
-                        {
-                            label: "Portfolio Value",
-                            value: fmt$(totalValue),
-                            color: "text-slate-100",
-                        },
-                        {
-                            label: "Cash",
-                            value: fmt$(cash),
-                            color: "text-slate-300",
-                        },
-                        {
-                            label: "Unrealized P&L",
-                            value: fmt$(unrealizedPnl),
-                            color:
-                                unrealizedPnl >= 0
-                                    ? "text-emerald-400"
-                                    : "text-red-400",
-                        },
-                        {
-                            label: "Realized P&L",
-                            value: fmt$(closedPnl),
-                            color:
-                                closedPnl >= 0
-                                    ? "text-emerald-400"
-                                    : "text-red-400",
-                        },
-                        {
-                            label: "Actual Return",
-                            value:
-                                actualReturnPct != null
-                                    ? fmtAnn(actualReturnPct)
-                                    : "—",
-                            color:
-                                actualReturnPct == null
-                                    ? "text-slate-400"
-                                    : actualReturnPct >= 0
-                                      ? "text-emerald-400"
-                                      : "text-red-400",
-                        },
-                        {
-                            label: "AVG Ann. Return",
-                            value: fmtAnn(portfolioAnnReturn),
-                            color:
-                                portfolioAnnReturn == null
-                                    ? "text-slate-400"
-                                    : portfolioAnnReturn >= 0
-                                      ? "text-emerald-400"
-                                      : "text-red-400",
-                        },
-                        {
-                            label: "Win Rate",
-                            value:
-                                tradeLog.length > 0
-                                    ? `${winRate.toFixed(0)}%`
-                                    : "—",
-                            color: "text-blue-400",
-                        },
+                        { label: "Portfolio Value", value: fmt$(totalValue), color: "text-slate-100" },
+                        { label: "Unrealized P&L", value: fmt$(unrealizedPnl), color: unrealizedPnl >= 0 ? "text-emerald-400" : "text-red-400" },
+                        { label: "Realized P&L", value: fmt$(closedPnl), color: closedPnl >= 0 ? "text-emerald-400" : "text-red-400" },
+                        { label: "Actual Return", value: actualReturnPct != null ? fmtAnn(actualReturnPct) : "—", color: actualReturnPct == null ? "text-slate-400" : actualReturnPct >= 0 ? "text-emerald-400" : "text-red-400" },
+                        { label: "AVG Ann. Return", value: fmtAnn(portfolioAnnReturn), color: portfolioAnnReturn == null ? "text-slate-400" : portfolioAnnReturn >= 0 ? "text-emerald-400" : "text-red-400" },
+                        { label: "Win Rate", value: tradeLog.length > 0 ? `${winRate.toFixed(0)}%` : "—", color: "text-blue-400" },
                     ].map(({ label, value, color }) => (
                         <div key={label}>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 mb-1">
-                                {label}
-                            </p>
-                            <p
-                                className={`text-xl font-bold tabular-nums ${color}`}
-                            >
-                                {value}
-                            </p>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 mb-1">{label}</p>
+                            <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
                         </div>
                     ))}
+
+                    {/* Cash — editable */}
+                    {!demoMode && (
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 mb-1">Cash</p>
+                            {editingCash ? (
+                                <form onSubmit={e => { e.preventDefault(); saveCash(cashInput); }} className="flex items-center gap-1">
+                                    <input
+                                        autoFocus
+                                        type="number"
+                                        value={cashInput}
+                                        onChange={e => setCashInput(e.target.value)}
+                                        onBlur={() => saveCash(cashInput)}
+                                        className="w-24 bg-slate-700/60 border border-blue-500/50 rounded px-2 py-0.5 text-sm text-white tabular-nums focus:outline-none"
+                                    />
+                                </form>
+                            ) : (
+                                <button
+                                    onClick={() => { setCashInput(String(cash)); setEditingCash(true); }}
+                                    title="Click to edit"
+                                    className="text-xl font-bold tabular-nums text-slate-300 hover:text-white transition-colors text-left"
+                                >
+                                    {fmt$(cash)}
+                                </button>
+                            )}
+                        </div>
+                    )}
+                    {demoMode && (
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 mb-1">Cash</p>
+                            <p className="text-xl font-bold tabular-nums text-slate-300">{fmt$(cash)}</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -1368,8 +1432,8 @@ export default function MattCapital() {
                                                 {!demoMode && (
                                                     <td className="px-2 py-3">
                                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={() => openEditWheel(i)} className="p-1 text-slate-500 hover:text-slate-200 rounded"><Pencil size={13} /></button>
-                                                            <button onClick={() => deleteWheel(i)} className="p-1 text-slate-500 hover:text-red-400 rounded"><Trash2 size={13} /></button>
+                                                            <button onClick={() => openEditWheel(p.id)} className="p-1 text-slate-500 hover:text-slate-200 rounded"><Pencil size={13} /></button>
+                                                            <button onClick={() => deleteWheel(p.id)} className="p-1 text-slate-500 hover:text-red-400 rounded"><Trash2 size={13} /></button>
                                                         </div>
                                                     </td>
                                                 )}
@@ -1441,8 +1505,8 @@ export default function MattCapital() {
                                                 {!demoMode && (
                                                     <td className="px-2 py-3">
                                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={() => openEditStock(i)} className="p-1 text-slate-500 hover:text-slate-200 rounded"><Pencil size={13} /></button>
-                                                            <button onClick={() => deleteStock(i)} className="p-1 text-slate-500 hover:text-red-400 rounded"><Trash2 size={13} /></button>
+                                                            <button onClick={() => openEditStock(p.id)} className="p-1 text-slate-500 hover:text-slate-200 rounded"><Pencil size={13} /></button>
+                                                            <button onClick={() => deleteStock(p.id)} className="p-1 text-slate-500 hover:text-red-400 rounded"><Trash2 size={13} /></button>
                                                         </div>
                                                     </td>
                                                 )}
@@ -1515,13 +1579,12 @@ export default function MattCapital() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {tradeLog.slice().reverse().map((t, ri) => {
-                                        const origIdx = tradeLog.length - 1 - ri;
+                                    {tradeLog.slice().reverse().map((t) => {
                                         const cap = tradeCapital(t);
                                         const dur = daysBetween(t.entry, t.exit);
                                         const ann = cap > 0 && dur ? (t.pnl / cap) * (365 / dur) * 100 : null;
                                         return (
-                                            <tr key={origIdx} className="group border-b border-white/[0.03] hover:bg-white/[0.02]">
+                                            <tr key={t.id} className="group border-b border-white/[0.03] hover:bg-white/[0.02]">
                                                 <td className="px-4 py-3 font-bold text-slate-100">{t.ticker}</td>
                                                 <td className="px-4 py-3 text-slate-400">{t.strategy}</td>
                                                 <td className="px-4 py-3 text-slate-400 tabular-nums">{t.contracts != null ? t.contracts : "—"}</td>
@@ -1541,8 +1604,8 @@ export default function MattCapital() {
                                                 {!demoMode && (
                                                     <td className="px-2 py-3">
                                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={() => openEditTrade(origIdx)} className="p-1 text-slate-500 hover:text-slate-200 rounded transition-colors"><Pencil size={13} /></button>
-                                                            <button onClick={() => deleteTrade(origIdx)} className="p-1 text-slate-500 hover:text-red-400 rounded transition-colors"><Trash2 size={13} /></button>
+                                                            <button onClick={() => openEditTrade(t.id)} className="p-1 text-slate-500 hover:text-slate-200 rounded transition-colors"><Pencil size={13} /></button>
+                                                            <button onClick={() => deleteTrade(t.id)} className="p-1 text-slate-500 hover:text-red-400 rounded transition-colors"><Trash2 size={13} /></button>
                                                         </div>
                                                     </td>
                                                 )}
@@ -1576,6 +1639,101 @@ export default function MattCapital() {
                         </div>
                     </div>
                 </>
+            )}
+
+            {/* Wheel delete / send-to-log modal */}
+            {wheelLogModal && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 rounded-xl ring-1 ring-white/[0.06] w-full max-w-sm p-5 flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                            <span className="font-semibold text-white text-sm">Remove — {wheelLogModal.position.ticker} {wheelLogModal.position.type}</span>
+                            <button onClick={() => setWheelLogModal(null)} className="text-slate-500 hover:text-slate-200"><X size={16} /></button>
+                        </div>
+
+                        {/* Pre-filled summary */}
+                        <div className="bg-slate-900/50 rounded-lg px-3 py-2 text-xs text-slate-400 space-y-0.5">
+                            <div className="flex justify-between"><span>Strike</span><span className="text-slate-200">${wheelLogModal.position.strike}</span></div>
+                            <div className="flex justify-between"><span>Contracts</span><span className="text-slate-200">{wheelLogModal.position.contracts}</span></div>
+                            <div className="flex justify-between"><span>Avg Price</span><span className="text-slate-200">${wheelLogModal.position.premium}</span></div>
+                            <div className="flex justify-between"><span>Entry</span><span className="text-slate-200">{wheelLogModal.position.entry || "—"}</span></div>
+                        </div>
+
+                        {/* Extra fields for log */}
+                        <div className="flex flex-col gap-3">
+                            {[
+                                { label: "Exit Date", key: "exit", type: "date" },
+                                { label: "Close Price", key: "closePrice", type: "number", placeholder: "0.01" },
+                                { label: "P&L ($)", key: "pnl", type: "number", placeholder: "60" },
+                            ].map(({ label, key, type, placeholder }) => (
+                                <div key={key}>
+                                    <label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 block mb-1">{label}</label>
+                                    <input type={type} value={wheelLogModal.logForm[key]} onChange={e => setWheelLogModal(m => ({ ...m, logForm: { ...m.logForm, [key]: e.target.value } }))}
+                                        placeholder={placeholder}
+                                        className="w-full bg-slate-700/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                </div>
+                            ))}
+                            <div>
+                                <label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 block mb-1">Result</label>
+                                <select value={wheelLogModal.logForm.result} onChange={e => setWheelLogModal(m => ({ ...m, logForm: { ...m.logForm, result: e.target.value } }))}
+                                    className="w-full bg-slate-700/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    {["win","loss","open"].map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-1">
+                            <button onClick={() => confirmDeleteWheel(false)} className="flex-1 px-3 py-2 rounded-lg text-xs text-red-400 hover:text-red-300 bg-red-500/10 ring-1 ring-red-500/20 transition-colors">Just Delete</button>
+                            <button onClick={() => confirmDeleteWheel(true)} className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors">Send to Log</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Stock delete / send-to-log modal */}
+            {stockLogModal && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 rounded-xl ring-1 ring-white/[0.06] w-full max-w-sm p-5 flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                            <span className="font-semibold text-white text-sm">Remove — {stockLogModal.position.ticker}</span>
+                            <button onClick={() => setStockLogModal(null)} className="text-slate-500 hover:text-slate-200"><X size={16} /></button>
+                        </div>
+
+                        {/* Pre-filled summary */}
+                        <div className="bg-slate-900/50 rounded-lg px-3 py-2 text-xs text-slate-400 space-y-0.5">
+                            <div className="flex justify-between"><span>Shares</span><span className="text-slate-200">{stockLogModal.position.shares.toLocaleString()}</span></div>
+                            <div className="flex justify-between"><span>Entry Price</span><span className="text-slate-200">${stockLogModal.position.entryPrice}</span></div>
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                            {[
+                                { label: "Exit Date", key: "exit", type: "date" },
+                                { label: "Close Price", key: "closePrice", type: "number", placeholder: "0.00" },
+                                { label: "P&L ($)", key: "pnl", type: "number", placeholder: "0.00" },
+                            ].map(({ label, key, type, placeholder }) => (
+                                <div key={key}>
+                                    <label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 block mb-1">{label}</label>
+                                    <input type={type} value={stockLogModal.logForm[key]}
+                                        onChange={e => setStockLogModal(m => ({ ...m, logForm: { ...m.logForm, [key]: e.target.value } }))}
+                                        placeholder={placeholder}
+                                        className="w-full bg-slate-700/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                </div>
+                            ))}
+                            <div>
+                                <label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 block mb-1">Result</label>
+                                <select value={stockLogModal.logForm.result}
+                                    onChange={e => setStockLogModal(m => ({ ...m, logForm: { ...m.logForm, result: e.target.value } }))}
+                                    className="w-full bg-slate-700/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    {["win","loss","open"].map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-1">
+                            <button onClick={() => confirmDeleteStock(false)} className="flex-1 px-3 py-2 rounded-lg text-xs text-red-400 hover:text-red-300 bg-red-500/10 ring-1 ring-red-500/20 transition-colors">Just Delete</button>
+                            <button onClick={() => confirmDeleteStock(true)} className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors">Send to Log</button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Wheel position add/edit modal */}
@@ -1679,7 +1837,7 @@ export default function MattCapital() {
                             <div>
                                 <label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 block mb-1">Strategy</label>
                                 <select value={tradeForm.strategy} onChange={e => setTradeForm(f => ({ ...f, strategy: e.target.value }))} className="w-full bg-slate-700/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
-                                    {["CSP","CC","PUT","CALL","Strangle","Iron Condor","Other"].map(s => <option key={s} value={s}>{s}</option>)}
+                                    {["CSP","CC","PUT","CALL","Strangle","Iron Condor","Stock","Other"].map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
                             <div>
