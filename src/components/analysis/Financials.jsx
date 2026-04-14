@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { fetchFinancials } from '../../utils/fetchFinancials'
+import { getAllSharedCache, saveSharedCache } from '../../utils/financialsSharedCache'
 import { MOCK_FINANCIALS } from '../../utils/mockFinancials'
 import { RefreshCw, AlertTriangle, KeyRound, Search, X, ClipboardPaste, Info } from 'lucide-react'
 import { KNOWN_ETFS, ETFCard } from './ETFCard'
@@ -1005,7 +1006,20 @@ export default function Financials({ investments, preloadSymbol }) {
     const ts = { ...timestamps, [sym]: Date.now() }
     setTimestamps(ts)
     try { localStorage.setItem(TS_KEY, JSON.stringify(ts)) } catch {}
+    saveSharedCache(sym, result)
   }
+
+  // Merge shared Supabase cache into local state on mount (fills gaps for tickers fetched by other users)
+  useEffect(() => {
+    getAllSharedCache().then(shared => {
+      if (!shared || Object.keys(shared).length === 0) return
+      setCache(prev => {
+        const merged = { ...shared, ...prev } // local wins if both exist
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(merged)) } catch {}
+        return merged
+      })
+    })
+  }, []) // eslint-disable-line
 
   // Merge pasted data into existing cache entry by date — never wipes previously pasted fields
   function mergePasteCache(sym, pasted) {

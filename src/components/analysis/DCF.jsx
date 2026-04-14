@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { fetchFinancials } from '../../utils/fetchFinancials'
+import { getSharedCache, saveSharedCache } from '../../utils/financialsSharedCache'
 import { MOCK_FINANCIALS } from '../../utils/mockFinancials'
 import { Search, Info, X, AlertTriangle, KeyRound, HelpCircle } from 'lucide-react'
 import {
@@ -247,14 +248,24 @@ export default function DCF({ investments }) {
     const s = sym.trim().toUpperCase()
     if (!s) return
     setLoading(true); setError(null); setData(null)
+    // Check localStorage first (fast), then shared Supabase cache, then hit API
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
       if (cached[s]) {
-        // Ignore cache if it contains mock data (annual length === 5 and first date is 2020-06-30 = MSFT mock)
         const isMock = s === 'MSFT' && cached[s]?.annual?.[0]?.date === '2020-06-30'
         if (!isMock) { setData(cached[s]); setSymbol(s); setLoading(false); return }
       }
     } catch {}
+    // Check shared Supabase cache before using an API token
+    const shared = await getSharedCache(s)
+    if (shared) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
+        cached[s] = shared
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cached))
+      } catch {}
+      setData(shared); setSymbol(s); setLoading(false); return
+    }
     const apiKey = localStorage.getItem('bt_av_key') || ''
     if (!apiKey) {
       if (s === 'MSFT') { setData(MOCK_FINANCIALS); setSymbol(s); setLoading(false); return }
@@ -267,6 +278,7 @@ export default function DCF({ investments }) {
         cached[s] = result
         localStorage.setItem(CACHE_KEY, JSON.stringify(cached))
       } catch {}
+      saveSharedCache(s, result)
       setData(result); setSymbol(s)
     } catch (e) { setError(e.message) }
     setLoading(false)

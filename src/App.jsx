@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import { useTrades } from "./hooks/useTrades";
 import { useInvestments } from "./hooks/useInvestments";
 import { useAccounts, accountKey } from "./hooks/useAccounts";
+import { useAuth } from "./hooks/useAuth";
+import { useUserSettings } from "./hooks/useUserSettings";
+import Auth from "./components/Auth";
+import Profile from "./components/Profile";
 import Dashboard from "./components/Dashboard";
 import TradeForm from "./components/TradeForm";
 import TradeTable from "./components/TradeTable";
@@ -12,7 +16,6 @@ import InvestmentCharts from "./components/investments/InvestmentCharts";
 import InvestmentForm from "./components/investments/InvestmentForm";
 import AnalysisDashboard from "./components/analysis/AnalysisDashboard";
 import MattCapital from "./components/fund/MattCapital";
-import { FUND_ACCESS_CODE } from "./utils/mattCapitalData";
 import {
     Plus,
     BarChart2,
@@ -28,6 +31,7 @@ import {
     Pencil,
     Trash2,
     Check,
+    User,
 } from "lucide-react";
 import TickerTape, { openWatchlistModal } from "./components/TickerTape";
 import { SEED_TRADES } from "./utils/seedData";
@@ -35,28 +39,28 @@ import { SEED_INVESTMENTS } from "./utils/seedInvestments";
 import { fetchAllPrices } from "./utils/fetchPrices";
 
 export default function App() {
+    const { user, loading: authLoading, signOut } = useAuth();
     const {
         accounts,
         activeAccount,
         activeId,
+        loading: accountsLoading,
         createAccount,
         renameAccount,
         deleteAccount,
         switchTo,
-    } = useAccounts();
+    } = useAccounts(user?.id);
     const { trades, addTrade, updateTrade, deleteTrade, loadTrades } =
-        useTrades(activeId);
+        useTrades(activeId, user?.id);
     const {
         investments,
         addInvestment,
         updateInvestment,
         deleteInvestment,
         loadInvestments,
-    } = useInvestments(activeId);
+    } = useInvestments(activeId, user?.id);
 
     const [section, setSection] = useState("investments"); // 'investments' | 'analysis' | 'trading' | 'fund'
-    const [fundCode, setFundCode] = useState(() => localStorage.getItem('bt_fund_code') || '')
-    const fundUnlocked = fundCode === FUND_ACCESS_CODE
     const [watchlistNav, setWatchlistNav] = useState(null);
     const [view, setView] = useState("trades");
     const [invView, setInvView] = useState("positions");
@@ -89,13 +93,9 @@ export default function App() {
     // Price refresh
     const [refreshing, setRefreshing] = useState(false);
     const [refreshResult, setRefreshResult] = useState(null);
-    const [showApiKey, setShowApiKey] = useState(false);
-    const [finnhubKey, setFinnhubKey] = useState(
-        () => localStorage.getItem("bt_finnhub_key") || "",
-    );
-    const [avKey, setAvKey] = useState(
-        () => localStorage.getItem("bt_av_key") || "",
-    );
+    const [showProfile, setShowProfile] = useState(false);
+    const { finnhubKey, avKey, mattCapAccess, displayName, saveKeys, saveDisplayName } = useUserSettings(user?.id);
+    const fundUnlocked = mattCapAccess;
 
     // Account switcher
     const [showAccounts, setShowAccounts] = useState(false);
@@ -226,7 +226,7 @@ export default function App() {
                 "MATIC",
             ].includes(sym?.toUpperCase());
         if (open.some((i) => !isCrypto(i.symbol)) && !finnhubKey) {
-            setShowApiKey(true);
+            setShowProfile(true);
             setRefreshing(false);
             return;
         }
@@ -251,14 +251,6 @@ export default function App() {
             setRefreshResult({ updated: 0, errors: [e.message] });
         }
         setRefreshing(false);
-    }
-    function saveApiKey(key) {
-        setFinnhubKey(key);
-        localStorage.setItem("bt_finnhub_key", key);
-    }
-    function saveAvKey(key) {
-        setAvKey(key);
-        localStorage.setItem("bt_av_key", key);
     }
     function submitPriceUpdate(e) {
         e.preventDefault();
@@ -296,6 +288,13 @@ export default function App() {
     // EF storage keys are per-account
     const efParamsKey = accountKey("bt_ef_params", activeId);
     const efResearchParamsKey = accountKey("bt_ef_research_params", activeId);
+
+    if (authLoading || (user && (accountsLoading || !activeAccount))) return (
+        <div className="min-h-screen bg-[#0c1524] flex items-center justify-center">
+            <div className="text-slate-400 text-sm">Loading…</div>
+        </div>
+    );
+    if (!user) return <Auth />;
 
     return (
         <div className="min-h-screen bg-slate-900 text-slate-100 overflow-x-hidden">
@@ -561,15 +560,6 @@ export default function App() {
                                 </>
                             )}
 
-                            {section === "analysis" && (
-                                <button
-                                    onClick={() => setShowApiKey(true)}
-                                    title="API Keys"
-                                    className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                                >
-                                    <KeyRound size={14} />
-                                </button>
-                            )}
 
                             {section === "investments" && (
                                 <>
@@ -604,13 +594,6 @@ export default function App() {
                                         </button>
                                     )}
                                     <button
-                                        onClick={() => setShowApiKey(true)}
-                                        title="Finnhub API key"
-                                        className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                                    >
-                                        <KeyRound size={14} />
-                                    </button>
-                                    <button
                                         onClick={handleRefreshPrices}
                                         disabled={refreshing}
                                         className="flex items-center gap-1 sm:gap-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-300 px-2 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
@@ -638,6 +621,13 @@ export default function App() {
                                     </button>
                                 </>
                             )}
+                            <button
+                                onClick={() => setShowProfile(true)}
+                                title="Profile"
+                                className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-700/60 hover:bg-slate-700 ring-1 ring-white/10 text-slate-400 hover:text-slate-200 transition-colors"
+                            >
+                                <User size={15} />
+                            </button>
                         </div>
                     </div>
 
@@ -767,168 +757,19 @@ export default function App() {
                 />
             )}
 
-            {/* API Keys Modal */}
-            {showApiKey && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-                    <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-md p-5">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-base font-semibold text-slate-100">
-                                API Keys
-                            </h3>
-                            <button
-                                onClick={() => setShowApiKey(false)}
-                                className="text-slate-500 hover:text-slate-200"
-                            >
-                                <X size={16} />
-                            </button>
-                        </div>
-                        <div className="space-y-5">
-                            <div>
-                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                                    Finnhub
-                                </p>
-                                <p className="text-xs text-slate-500 mb-2">
-                                    Price refresh · Fundamentals · Research —
-                                    free at{" "}
-                                    <span className="text-blue-400">
-                                        finnhub.io
-                                    </span>
-                                </p>
-                                <form
-                                    onSubmit={(e) => {
-                                        e.preventDefault();
-                                        saveApiKey(e.target.key.value.trim());
-                                    }}
-                                    className="flex gap-2"
-                                >
-                                    <input
-                                        name="key"
-                                        type="text"
-                                        defaultValue={finnhubKey}
-                                        autoFocus
-                                        placeholder="Finnhub API key…"
-                                        className={`flex-1 ${inputCls} font-mono text-sm`}
-                                    />
-                                    <button
-                                        type="submit"
-                                        className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-medium"
-                                    >
-                                        Save
-                                    </button>
-                                </form>
-                                {finnhubKey && (
-                                    <button
-                                        onClick={() => {
-                                            setFinnhubKey("");
-                                            localStorage.removeItem(
-                                                "bt_finnhub_key",
-                                            );
-                                        }}
-                                        className="mt-1 text-xs text-red-400 hover:text-red-300"
-                                    >
-                                        Clear
-                                    </button>
-                                )}
-                            </div>
-                            <div className="border-t border-slate-700" />
-                            <div>
-                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                                    Alpha Vantage
-                                </p>
-                                <p className="text-xs text-slate-500 mb-2">
-                                    Financial Statements tab — free at{" "}
-                                    <span className="text-blue-400">
-                                        alphavantage.co
-                                    </span>{" "}
-                                    · 25 req/day · resets midnight UTC
-                                </p>
-                                <form
-                                    onSubmit={(e) => {
-                                        e.preventDefault();
-                                        saveAvKey(e.target.key.value.trim());
-                                    }}
-                                    className="flex gap-2"
-                                >
-                                    <input
-                                        name="key"
-                                        type="text"
-                                        defaultValue={avKey}
-                                        placeholder="Alpha Vantage API key…"
-                                        className={`flex-1 ${inputCls} font-mono text-sm`}
-                                    />
-                                    <button
-                                        type="submit"
-                                        className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-medium"
-                                    >
-                                        Save
-                                    </button>
-                                </form>
-                                {avKey && (
-                                    <button
-                                        onClick={() => {
-                                            setAvKey("");
-                                            localStorage.removeItem(
-                                                "bt_av_key",
-                                            );
-                                        }}
-                                        className="mt-1 text-xs text-red-400 hover:text-red-300"
-                                    >
-                                        Clear
-                                    </button>
-                                )}
-                            </div>
-                            <div className="border-t border-slate-700" />
-                            <div>
-                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                                    Fund Access Code
-                                </p>
-                                <p className="text-xs text-slate-500 mb-2">
-                                    Unlocks the MATT Capital tab
-                                </p>
-                                <form
-                                    onSubmit={(e) => {
-                                        e.preventDefault()
-                                        const val = e.target.code.value.trim()
-                                        setFundCode(val)
-                                        localStorage.setItem('bt_fund_code', val)
-                                    }}
-                                    className="flex gap-2"
-                                >
-                                    <input
-                                        name="code"
-                                        type="password"
-                                        defaultValue={fundCode}
-                                        placeholder="Enter access code…"
-                                        className={`flex-1 ${inputCls} font-mono text-sm`}
-                                    />
-                                    <button
-                                        type="submit"
-                                        className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-medium"
-                                    >
-                                        Save
-                                    </button>
-                                </form>
-                                {fundCode && (
-                                    <button
-                                        onClick={() => {
-                                            setFundCode('')
-                                            localStorage.removeItem('bt_fund_code')
-                                        }}
-                                        className="mt-1 text-xs text-red-400 hover:text-red-300"
-                                    >
-                                        Clear
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => setShowApiKey(false)}
-                            className="mt-5 w-full bg-slate-700 hover:bg-slate-600 text-slate-300 py-2 rounded text-sm font-medium"
-                        >
-                            Done
-                        </button>
-                    </div>
-                </div>
+            {/* Profile Modal */}
+            {showProfile && (
+                <Profile
+                    user={user}
+                    activeAccount={activeAccount}
+                    displayName={displayName}
+                    onSaveDisplayName={saveDisplayName}
+                    finnhubKey={finnhubKey}
+                    avKey={avKey}
+                    onSaveKeys={saveKeys}
+                    onSignOut={signOut}
+                    onClose={() => setShowProfile(false)}
+                />
             )}
 
             {/* Refresh result toast */}

@@ -1,45 +1,64 @@
 import { useState, useEffect, useRef } from 'react'
-import { accountKey } from './useAccounts'
+import { supabase } from '../utils/supabase'
 
-const BASE_KEY = 'bt_speculation_investments'
+export function useInvestments(accountId, userId) {
+  const [investments, setInvestments] = useState([])
+  const [loading, setLoading] = useState(false)
+  const accountIdRef = useRef(accountId)
 
-export function useInvestments(accountId = 'default') {
-  const storageKey = accountKey(BASE_KEY, accountId)
-
-  const [investments, setInvestmentsRaw] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(storageKey) || '[]') } catch { return [] }
-  })
-
-  const keyRef = useRef(storageKey)
-
-  // When account switches, load from new key without saving the old data there
   useEffect(() => {
-    if (keyRef.current === storageKey) return
-    keyRef.current = storageKey
-    try { setInvestmentsRaw(JSON.parse(localStorage.getItem(storageKey) || '[]')) }
-    catch { setInvestmentsRaw([]) }
-  }, [storageKey])
+    if (!accountId) return
+    accountIdRef.current = accountId
+    setLoading(true)
 
-  // Save on every change (to whichever key is current)
-  useEffect(() => {
-    localStorage.setItem(keyRef.current, JSON.stringify(investments))
-  }, [investments])
+    supabase
+      .from('investments')
+      .select('*')
+      .eq('account_id', accountId)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) { console.error('Failed to load investments:', error); setLoading(false); return }
+        if (accountIdRef.current === accountId) {
+          setInvestments((data || []).map(r => ({ id: r.id, createdAt: r.created_at, ...r.data })))
+          setLoading(false)
+        }
+      })
+  }, [accountId])
 
-  function addInvestment(inv) {
-    setInvestmentsRaw(prev => [{ ...inv, id: crypto.randomUUID(), createdAt: new Date().toISOString() }, ...prev])
+  async function addInvestment(inv) {
+    const { id: _id, createdAt: _c, ...payload } = inv
+    const { data, error } = await supabase
+      .from('investments')
+      .insert({ account_id: accountId, user_id: userId, data: payload })
+      .select()
+      .single()
+    if (error) { console.error('Failed to add investment:', error); return }
+    if (data) setInvestments(prev => [{ id: data.id, createdAt: data.created_at, ...data.data }, ...prev])
   }
 
-  function updateInvestment(id, updates) {
-    setInvestmentsRaw(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i))
+  async function updateInvestment(id, updates) {
+    const existing = investments.find(i => i.id === id)
+    if (!existing) return
+    const { id: _id, createdAt: _c, ...rest } = existing
+    const merged = { ...rest, ...updates }
+    const { error } = await supabase.from('investments').update({ data: merged }).eq('id', id)
+    if (!error) setInvestments(prev => prev.map(i => i.id === id ? { id, createdAt: i.createdAt, ...merged } : i))
   }
 
-  function deleteInvestment(id) {
-    setInvestmentsRaw(prev => prev.filter(i => i.id !== id))
+  async function deleteInvestment(id) {
+    await supabase.from('investments').delete().eq('id', id)
+    setInvestments(prev => prev.filter(i => i.id !== id))
   }
 
-  function loadInvestments(list) {
-    setInvestmentsRaw(list)
+  async function loadInvestments(list) {
+    // Bulk replace
+    await supabase.from('investments').delete().eq('account_id', accountId)
+    if (list.length === 0) { setInvestments([]); return }
+    const rows = list.map(({ id: _id, createdAt: _c, ...data }) => ({ account_id: accountId, user_id: userId, data }))
+    const { data } = await supabase.from('investments').insert(rows).select()
+    if (data) setInvestments(data.map(r => ({ id: r.id, createdAt: r.created_at, ...r.data })))
+    else setInvestments(list)
   }
 
-  return { investments, addInvestment, updateInvestment, deleteInvestment, loadInvestments }
+  return { investments, addInvestment, updateInvestment, deleteInvestment, loadInvestments, loading }
 }

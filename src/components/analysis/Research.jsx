@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { fetchFundamentals } from '../../utils/fetchFundamentals'
 import { fetchFinancials } from '../../utils/fetchFinancials'
+import { getSharedCache, saveSharedCache } from '../../utils/financialsSharedCache'
 import { fmtInv } from '../../utils/investmentCalcs'
 import { Search, X, RefreshCw, KeyRound, AlertTriangle, LayoutList, Columns, ExternalLink, ChevronDown, ChevronUp, DatabaseZap, Globe, TrendingUp, TrendingDown } from 'lucide-react'
 import { getCorrelationMatrixForSymbols, setRealCorrelations, setComputedParams } from '../../utils/efficientFrontier'
@@ -679,12 +680,22 @@ export default function Research({ preloadSymbol, preloadCompareSymbols, onClear
   }
 
   const loadFinancials = useCallback(async (sym) => {
-    if (!avApiKey) return
     setFinLoading(prev => ({ ...prev, [sym]: true }))
     try {
+      // Check shared Supabase cache before using an API token
+      const shared = await getSharedCache(sym)
+      if (shared) {
+        const existing = JSON.parse(localStorage.getItem(FIN_CACHE_KEY) || '{}')
+        localStorage.setItem(FIN_CACHE_KEY, JSON.stringify({ ...existing, [sym]: shared }))
+        setFinLoaded(prev => ({ ...prev, [sym]: true }))
+        setFinLoading(prev => ({ ...prev, [sym]: false }))
+        return
+      }
+      if (!avApiKey) { setFinLoading(prev => ({ ...prev, [sym]: false })); return }
       const result = await fetchFinancials(sym, avApiKey)
       const existing = JSON.parse(localStorage.getItem(FIN_CACHE_KEY) || '{}')
       localStorage.setItem(FIN_CACHE_KEY, JSON.stringify({ ...existing, [sym]: result }))
+      saveSharedCache(sym, result)
       setFinLoaded(prev => ({ ...prev, [sym]: true }))
     } catch {}
     setFinLoading(prev => ({ ...prev, [sym]: false }))

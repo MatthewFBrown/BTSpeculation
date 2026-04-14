@@ -11,18 +11,21 @@ export function calcInvestmentPnL(inv) {
   const cost = parseFloat(inv.avgCost)
   if (isNaN(shares) || isNaN(cost)) return { unrealized: null, realized: null, total: null, returnPct: null }
 
+  // Short options profit when price falls below entry (sign is inverted vs long)
+  const isShort = inv.assetType === 'Option' && inv.optionDirection === 'short'
+
   if (inv.status === 'closed') {
     const sell = parseFloat(inv.sellPrice)
     if (isNaN(sell)) return { unrealized: null, realized: null, total: null, returnPct: null }
-    const realized = (sell - cost) * shares
-    const returnPct = ((sell - cost) / cost) * 100
+    const realized = isShort ? (cost - sell) * shares : (sell - cost) * shares
+    const returnPct = isShort ? ((cost - sell) / cost) * 100 : ((sell - cost) / cost) * 100
     return { unrealized: null, realized, total: realized, returnPct }
   }
 
   const current = parseFloat(inv.currentPrice)
   if (isNaN(current)) return { unrealized: null, realized: null, total: null, returnPct: null }
-  const unrealized = (current - cost) * shares
-  const returnPct = ((current - cost) / cost) * 100
+  const unrealized = isShort ? (cost - current) * shares : (current - cost) * shares
+  const returnPct = isShort ? ((cost - current) / cost) * 100 : ((current - cost) / cost) * 100
   return { unrealized, realized: null, total: unrealized, returnPct }
 }
 
@@ -35,9 +38,10 @@ export function getInvestmentStats(investments) {
     const shares = parseFloat(i.shares) || 0
     const cost = parseFloat(i.avgCost) || 0
     const current = parseFloat(i.currentPrice) || 0
+    const isShort = i.assetType === 'Option' && i.optionDirection === 'short'
     totalInvested += shares * cost
     totalCurrentValue += shares * current
-    totalUnrealized += (current - cost) * shares
+    totalUnrealized += isShort ? (cost - current) * shares : (current - cost) * shares
   })
 
   let totalRealized = 0

@@ -5,7 +5,12 @@
       "Read(//c/Users/mfb03/.claude/**)",
       "Bash(curl -s \"https://finnhub.io/api/v1/stock/earnings-estimate?symbol=AAPL&token=$\\(grep -o 'bt_finnhub_key[^}]*' ~/.claude/settings.local.json)",
       "WebFetch(domain:finnhub.io)",
-      "Bash(node -e \"console.log\\(require\\('./node_modules/recharts/package.json'\\).version\\)\")"
+      "Bash(node -e \"console.log\\(require\\('./node_modules/recharts/package.json'\\).version\\)\")",
+      "Bash(xargs grep:*)",
+      "Bash(sed \"s/.*['\\\\\"]//g\")",
+      "Bash(sed \"s/['\\\\\"]//g\")",
+      "Bash(ls .env*)",
+      "Bash(git rm:*)"
     ],
     "additionalDirectories": [
       "c:\\code\\Github\\BTSpeculation\\docs\\superpowers"
