@@ -7,6 +7,7 @@ import Research from './Research'
 import DCF from './DCF'
 import PortfolioOptimizer from './PortfolioOptimizer'
 import WheelTracker from './WheelTracker'
+import Screener from './Screener'
 import { fetchCorrelations } from '../../utils/fetchCorrelations'
 import { setRealCorrelations, setComputedParams } from '../../utils/efficientFrontier'
 
@@ -19,9 +20,10 @@ const TABS = [
   { id: 'optimizer',    label: 'Optimizer' },
   { id: 'risk',         label: 'Risk' },
   { id: 'wheel',        label: 'Wheel' },
+  { id: 'screener',     label: 'Screener' },
 ]
 
-export default function AnalysisDashboard({ investments, trades = [], cash = 0, watchlistNav, onWatchlistNavConsumed, efParamsKey = 'bt_ef_params', efResearchParamsKey = 'bt_ef_research_params' }) {
+export default function AnalysisDashboard({ investments, trades = [], cash = 0, watchlistNav, onWatchlistNavConsumed, efParamsKey = 'bt_ef_params', efResearchParamsKey = 'bt_ef_research_params', accountId = 'default', userId }) {
   const [tab, setTab] = useState('fundamentals')
   const [researchSymbol,   setResearchSymbol]   = useState(null)
   const [financialsSymbol, setFinancialsSymbol] = useState(null)
@@ -78,6 +80,7 @@ export default function AnalysisDashboard({ investments, trades = [], cash = 0, 
       {tab === 'optimizer'    && <PortfolioOptimizer  investments={investments} corrVersion={corrVersion} incomingSymbols={optimizerSymbols} onClearIncoming={() => setOptimizerSymbols(null)} />}
       {tab === 'risk'         && <RiskAnalysis        investments={investments} cash={cash} corrVersion={corrVersion} incomingSymbols={riskSymbols} onClearIncoming={() => setRiskSymbols(null)} />}
       {tab === 'wheel'        && <WheelTracker        trades={trades} investments={investments} />}
+      {tab === 'screener'     && <Screener accountId={accountId} userId={userId} />}
     </div>
   )
 }

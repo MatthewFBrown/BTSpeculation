@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTrades } from "./hooks/useTrades";
 import { useInvestments } from "./hooks/useInvestments";
 import { useAccounts, accountKey } from "./hooks/useAccounts";
+import { supabase } from "./utils/supabase";
 import { useAuth } from "./hooks/useAuth";
 import { useUserSettings } from "./hooks/useUserSettings";
 import Auth from "./components/Auth";
@@ -73,21 +74,20 @@ export default function App() {
     const [updatePriceInv, setUpdatePriceInv] = useState(null);
     const [newPrice, setNewPrice] = useState("");
 
-    // Cash — per account
-    const cashKey = accountKey("bt_cash", activeId);
-    const [cash, setCash] = useState(() =>
-        parseFloat(localStorage.getItem(cashKey) || "0"),
-    );
+    // Cash — per account, stored in DB accounts.cash
+    const [cash, setCash] = useState(0);
 
-    // Reload cash when account switches
+    // Load cash from activeAccount whenever account switches
     useEffect(() => {
-        setCash(parseFloat(localStorage.getItem(cashKey) || "0"));
-    }, [cashKey]);
+        setCash(parseFloat(activeAccount?.cash ?? 0));
+    }, [activeAccount?.id]);
 
-    function handleCashUpdate(val) {
+    async function handleCashUpdate(val) {
         const n = Math.max(0, parseFloat(val) || 0);
         setCash(n);
-        localStorage.setItem(cashKey, String(n));
+        if (activeId) {
+            await supabase.from('accounts').update({ cash: n }).eq('id', activeId);
+        }
     }
 
     // Price refresh
@@ -725,7 +725,7 @@ export default function App() {
                     </>
                 )}
 
-                {section === "fund" && <MattCapital />}
+                {section === "fund" && <MattCapital accountId={activeId} userId={user?.id} />}
 
                 {section === "analysis" && (
                     <AnalysisDashboard
@@ -735,6 +735,8 @@ export default function App() {
                         onWatchlistNavConsumed={() => setWatchlistNav(null)}
                         efParamsKey={efParamsKey}
                         efResearchParamsKey={efResearchParamsKey}
+                        accountId={activeId}
+                        userId={user?.id}
                     />
                 )}
             </main>

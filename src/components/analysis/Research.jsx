@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { addSymbolToWatchlist } from '../TickerTape'
 import { fetchFundamentals } from '../../utils/fetchFundamentals'
 import { fetchFinancials } from '../../utils/fetchFinancials'
 import { getSharedCache, saveSharedCache } from '../../utils/financialsSharedCache'
@@ -637,6 +638,7 @@ export default function Research({ preloadSymbol, preloadCompareSymbols, onClear
     // Only add to symbols if it's not already there (for manual searches)
     setSymbols(prev => prev.includes(sym) ? prev : [...prev, sym])
     setSelected(sym)
+    addSymbolToWatchlist(sym)
     setLoading(prev => ({ ...prev, [sym]: true }))
     setErrors(prev => { const n = { ...prev }; delete n[sym]; return n })
     try {

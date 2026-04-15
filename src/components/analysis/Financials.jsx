@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
+import { addSymbolToWatchlist } from '../TickerTape'
 import { fetchFinancials } from '../../utils/fetchFinancials'
 import { getAllSharedCache, saveSharedCache } from '../../utils/financialsSharedCache'
 import { MOCK_FINANCIALS } from '../../utils/mockFinancials'
@@ -1071,6 +1072,7 @@ export default function Financials({ investments, preloadSymbol }) {
     if (cache[sym]) return
     setLoading(true)
     setError(null)
+    addSymbolToWatchlist(sym)
     try {
       const result = await fetchFinancials(sym, apiKey)
       updateCache(sym, result)

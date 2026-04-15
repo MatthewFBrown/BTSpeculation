@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { RefreshCw, HelpCircle, Calculator, Plus, Pencil, Trash2, X } from "lucide-react";
 import { supabase } from "../../utils/supabase";
+import Screener from "../analysis/Screener";
 
 const DEMO_DATA = {"startDate":"2026-04-08","cash":12450,"wheelPositions":[{"ticker":"SOFI","type":"CSP","strike":14.5,"entry":"2026-04-08","expiry":"2026-04-17","premium":0.13,"contracts":4},{"ticker":"CELH","type":"CSP","strike":31,"entry":"2026-04-08","expiry":"2026-04-17","premium":0.20,"contracts":1},{"ticker":"AMD","type":"CSP","strike":105,"entry":"2026-04-07","expiry":"2026-04-25","premium":1.85,"contracts":1},{"ticker":"PLTR","type":"CC","strike":85,"entry":"2026-04-01","expiry":"2026-04-17","premium":1.10,"contracts":2}],"stockPositions":[{"ticker":"PLTR","shares":200,"entryPrice":71.50},{"ticker":"SOFI","shares":400,"entryPrice":14.20}],"tradeLog":[{"ticker":"SOFI","strategy":"CSP","entry":"2025-12-02","exit":"2025-12-06","pnl":52,"capital":5800,"result":"win"},{"ticker":"MARA","strategy":"CSP","entry":"2025-12-02","exit":"2025-12-19","pnl":145,"capital":4000,"result":"win"},{"ticker":"AMD","strategy":"CSP","entry":"2025-12-09","exit":"2025-12-13","pnl":98,"capital":11500,"result":"win"},{"ticker":"CELH","strategy":"CSP","entry":"2025-12-09","exit":"2025-12-19","pnl":-180,"capital":3200,"result":"loss"},{"ticker":"SOFI","strategy":"CSP","entry":"2025-12-15","exit":"2025-12-19","pnl":44,"capital":5600,"result":"win"},{"ticker":"MARA","strategy":"CSP","entry":"2025-12-22","exit":"2025-12-26","pnl":67,"capital":3800,"result":"win"},{"ticker":"AMD","strategy":"CSP","entry":"2026-01-06","exit":"2026-01-10","pnl":112,"capital":11000,"result":"win"},{"ticker":"PLTR","strategy":"CSP","entry":"2026-01-06","exit":"2026-01-17","pnl":220,"capital":7000,"result":"win"},{"ticker":"SOFI","strategy":"CSP","entry":"2026-01-06","exit":"2026-01-10","pnl":48,"capital":5600,"result":"win"},{"ticker":"CELH","strategy":"CSP","entry":"2026-01-13","exit":"2026-01-17","pnl":35,"capital":3000,"result":"win"},{"ticker":"AMD","strategy":"CSP","entry":"2026-01-20","exit":"2026-01-31","pnl":-240,"capital":10500,"result":"loss"},{"ticker":"AMD","strategy":"CC","entry":"2026-02-03","exit":"2026-02-07","pnl":155,"capital":10500,"result":"win"},{"ticker":"PLTR","strategy":"CSP","entry":"2026-01-27","exit":"2026-01-31","pnl":195,"capital":7200,"result":"win"},{"ticker":"SOFI","strategy":"CSP","entry":"2026-01-27","exit":"2026-01-31","pnl":56,"capital":5800,"result":"win"},{"ticker":"MARA","strategy":"CSP","entry":"2026-02-03","exit":"2026-02-07","pnl":-95,"capital":3600,"result":"loss"},{"ticker":"CELH","strategy":"CSP","entry":"2026-02-03","exit":"2026-02-20","pnl":75,"capital":3100,"result":"win"},{"ticker":"AMD","strategy":"CC","entry":"2026-02-10","exit":"2026-02-14","pnl":130,"capital":10500,"result":"win"},{"ticker":"PLTR","strategy":"CSP","entry":"2026-02-10","exit":"2026-02-21","pnl":210,"capital":7500,"result":"win"},{"ticker":"SOFI","strategy":"CSP","entry":"2026-02-17","exit":"2026-02-21","pnl":60,"capital":5800,"result":"win"},{"ticker":"AMD","strategy":"CC","entry":"2026-02-17","exit":"2026-02-28","pnl":185,"capital":10500,"result":"win"},{"ticker":"MARA","strategy":"CSP","entry":"2026-02-24","exit":"2026-02-28","pnl":88,"capital":3400,"result":"win"},{"ticker":"PLTR","strategy":"CSP","entry":"2026-03-03","exit":"2026-03-07","pnl":-310,"capital":7000,"result":"loss"},{"ticker":"PLTR","strategy":"CC","entry":"2026-03-10","exit":"2026-03-14","pnl":175,"capital":7150,"result":"win"},{"ticker":"SOFI","strategy":"CSP","entry":"2026-03-03","exit":"2026-03-07","pnl":52,"capital":5800,"result":"win"},{"ticker":"AMD","strategy":"CSP","entry":"2026-03-03","exit":"2026-03-21","pnl":165,"capital":11000,"result":"win"},{"ticker":"CELH","strategy":"CSP","entry":"2026-03-10","exit":"2026-03-14","pnl":40,"capital":3100,"result":"win"},{"ticker":"SOFI","strategy":"CSP","entry":"2026-03-17","exit":"2026-03-21","pnl":48,"capital":5800,"result":"win"},{"ticker":"PLTR","strategy":"CC","entry":"2026-03-17","exit":"2026-03-28","pnl":230,"capital":7150,"result":"win"},{"ticker":"MARA","strategy":"CSP","entry":"2026-03-17","exit":"2026-03-21","pnl":-115,"capital":3200,"result":"loss"},{"ticker":"AMD","strategy":"CSP","entry":"2026-03-24","exit":"2026-03-28","pnl":145,"capital":10500,"result":"win"},{"ticker":"CELH","strategy":"CSP","entry":"2026-03-24","exit":"2026-04-04","pnl":55,"capital":3100,"result":"win"},{"ticker":"SOFI","strategy":"CSP","entry":"2026-03-31","exit":"2026-04-04","pnl":26,"capital":5800,"result":"win"},{"ticker":"PLTR","strategy":"CC","entry":"2026-03-31","exit":"2026-04-04","pnl":195,"capital":7150,"result":"win"},{"ticker":"AMD","strategy":"CSP","entry":"2026-04-01","exit":"2026-04-05","pnl":-190,"capital":10500,"result":"loss"}]};
 import {
@@ -948,7 +949,7 @@ function tradeCapital(t) {
     return null;
 }
 
-export default function MattCapital() {
+export default function MattCapital({ accountId = 'default', userId }) {
     const apiKey = localStorage.getItem("bt_finnhub_key") || "";
     // ── Per-table state ────────────────────────────────────────────
     const [wheelPositions, setWheelPositions] = useState([]);
@@ -1371,6 +1372,7 @@ export default function MattCapital() {
                     ["portfolio", "Portfolio"],
                     ["statistics", "Statistics"],
                     ["strikes", "Strike Calculator"],
+                    ["screener", "Screener"],
                 ].map(([id, label]) => (
                     <button
                         key={id}
@@ -2756,6 +2758,7 @@ export default function MattCapital() {
                 })()}
 
             {tab === "strikes" && <StrikeCalculator />}
+            {tab === "screener" && <Screener accountId={accountId} userId={userId} />}
         </div>
     );
 }

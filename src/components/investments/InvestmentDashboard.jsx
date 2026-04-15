@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { getInvestmentStats, fmtInv, fmtPct } from '../../utils/investmentCalcs'
 import { Pencil, Check } from 'lucide-react'
 
-function Hero({ s, cash, totalPortfolio }) {
+function Hero({ s, cash, cspCollateral, totalPortfolio }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
       <div className="bg-slate-800/50 hover:bg-slate-800/70 backdrop-blur-md p-4 sm:p-6 rounded-lg ring-1 ring-white/[0.08] border-t-2 border-blue-500 transition-all duration-200">
@@ -10,6 +10,7 @@ function Hero({ s, cash, totalPortfolio }) {
         <p className="text-2xl sm:text-4xl font-bold tabular-nums tracking-tight text-slate-100">{fmtInv(totalPortfolio)}</p>
         <p className="text-xs text-slate-500 mt-3">
           Equities {fmtInv(s.totalCurrentValue)} · Cash {fmtInv(cash)}
+          {cspCollateral > 0 && <> · CSP Collateral {fmtInv(cspCollateral)}</>}
         </p>
       </div>
       <div className={`bg-slate-800/50 hover:bg-slate-800/70 backdrop-blur-md p-4 sm:p-6 rounded-lg ring-1 ring-white/[0.08] border-t-2 transition-all duration-200 ${s.totalUnrealized >= 0 ? 'border-emerald-500' : 'border-red-500'}`}>
@@ -69,7 +70,9 @@ export default function InvestmentDashboard({ investments, cash = 0, onCashUpdat
   const [activeTab, setActiveTab] = useState(0)
   const [editingCash, setEditingCash] = useState(false)
   const [cashInput, setCashInput] = useState('')
-  const totalPortfolio = s.totalCurrentValue + cash
+
+  const cspCollateral = s.cspCollateral
+  const totalPortfolio = s.totalCurrentValue + cash + cspCollateral
   const cashPct = totalPortfolio > 0 ? (cash / totalPortfolio) * 100 : 0
 
   function startEdit() { setCashInput(String(cash)); setEditingCash(true) }
@@ -77,7 +80,7 @@ export default function InvestmentDashboard({ investments, cash = 0, onCashUpdat
 
   return (
     <div className="mb-6 space-y-4">
-      <Hero s={s} cash={cash} totalPortfolio={totalPortfolio} />
+      <Hero s={s} cash={cash} cspCollateral={cspCollateral} totalPortfolio={totalPortfolio} />
 
       {/* Mobile tab switcher */}
       <div className="flex md:hidden gap-1.5">
