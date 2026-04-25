@@ -1,15 +1,15 @@
 import { useState } from 'react'
-import { getInvestmentStats, fmtInv, fmtPct } from '../../utils/investmentCalcs'
+import { getInvestmentStats, calcInvestmentPnL, fmtInv, fmtPct } from '../../utils/investmentCalcs'
 import { Pencil, Check } from 'lucide-react'
 
-function Hero({ s, cash, cspCollateral, totalPortfolio }) {
+function Hero({ s, availableCash, cspCollateral, totalPortfolio }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
       <div className="bg-slate-800/50 hover:bg-slate-800/70 backdrop-blur-md p-4 sm:p-6 rounded-lg ring-1 ring-white/[0.08] border-t-2 border-blue-500 transition-all duration-200">
         <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400 mb-2">Total Portfolio</p>
         <p className="text-2xl sm:text-4xl font-bold tabular-nums tracking-tight text-slate-100">{fmtInv(totalPortfolio)}</p>
         <p className="text-xs text-slate-500 mt-3">
-          Equities {fmtInv(s.totalCurrentValue)} · Cash {fmtInv(cash)}
+          Equities {fmtInv(s.totalCurrentValue)} · Cash {fmtInv(availableCash)}
           {cspCollateral > 0 && <> · CSP Collateral {fmtInv(cspCollateral)}</>}
         </p>
       </div>
@@ -63,7 +63,7 @@ function MetricGroup({ title, accent, children, hidden = false }) {
   )
 }
 
-const INV_TABS = ['Portfolio', 'Closed Positions', 'Best / Worst']
+const INV_TABS = ['Portfolio', 'Closed Positions']
 
 export default function InvestmentDashboard({ investments, cash = 0, onCashUpdate }) {
   const s = getInvestmentStats(investments)
@@ -72,15 +72,37 @@ export default function InvestmentDashboard({ investments, cash = 0, onCashUpdat
   const [cashInput, setCashInput] = useState('')
 
   const cspCollateral = s.cspCollateral
-  const totalPortfolio = s.totalCurrentValue + cash + cspCollateral
-  const cashPct = totalPortfolio > 0 ? (cash / totalPortfolio) * 100 : 0
+  const openStockCost = investments
+    .filter(i => i.status === 'open' && i.assetType !== 'Option')
+    .reduce((sum, i) => sum + (parseFloat(i.shares) || 0) * (parseFloat(i.avgCost) || 0), 0)
+  const availableCash  = cash - openStockCost - cspCollateral + s.totalRealized
+  const totalPortfolio = s.totalCurrentValue + availableCash + cspCollateral
+
+  const actualReturn = cash > 0 ? (s.totalPnL / cash) * 100 : null
+
+  const avgAnnReturn = (() => {
+    const rates = investments
+      .filter(i => i.status === 'closed' && i.assetType === 'Option' && i.buyDate && i.sellDate)
+      .map(i => {
+        const dur = Math.round((new Date(i.sellDate) - new Date(i.buyDate)) / 86400000)
+        const strike = parseFloat(i.strike) || 0
+        const shares = parseFloat(i.shares) || 0
+        const collateral = shares * strike * 100
+        const pnl = calcInvestmentPnL(i).realized
+        if (dur > 0 && collateral > 0 && pnl != null) return (pnl / collateral) * (365 / dur) * 100
+        return null
+      })
+      .filter(r => r !== null)
+    return rates.length > 0 ? rates.reduce((a, b) => a + b, 0) / rates.length : null
+  })()
+  const cashPct = totalPortfolio > 0 ? (availableCash / totalPortfolio) * 100 : 0
 
   function startEdit() { setCashInput(String(cash)); setEditingCash(true) }
   function commitEdit() { onCashUpdate?.(cashInput); setEditingCash(false) }
 
   return (
     <div className="mb-6 space-y-4">
-      <Hero s={s} cash={cash} cspCollateral={cspCollateral} totalPortfolio={totalPortfolio} />
+      <Hero s={s} availableCash={availableCash} cspCollateral={cspCollateral} totalPortfolio={totalPortfolio} />
 
       {/* Mobile tab switcher */}
       <div className="flex md:hidden gap-1.5">
@@ -92,15 +114,16 @@ export default function InvestmentDashboard({ investments, cash = 0, onCashUpdat
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <MetricGroup title="Portfolio" accent="border-t-blue-500" hidden={activeTab !== 0}>
           <MetricRow label="Open Positions"   value={s.openCount || '—'} color="text-blue-400" />
           <MetricRow label="Equities Value"   value={fmtInv(s.totalCurrentValue)} />
           <MetricRow label="Unrealized P&L"   value={fmtInv(s.totalUnrealized)} color={s.totalUnrealized >= 0 ? 'text-green-400' : 'text-red-400'} />
           <MetricRow label="Return"           value={fmtPct(s.totalReturn)} color={s.totalReturn >= 0 ? 'text-green-400' : 'text-red-400'} sub="open positions" />
+          <MetricRow label="Actual Return"    value={actualReturn !== null ? `${actualReturn >= 0 ? '+' : ''}${actualReturn.toFixed(1)}%` : '—'} color={actualReturn === null ? 'text-slate-500' : actualReturn >= 0 ? 'text-green-400' : 'text-red-400'} sub="total P&L / cost basis" />
           {/* Cash row */}
           <div className="flex items-center justify-between py-2.5 border-b border-slate-700/60">
-            <span className="text-sm text-slate-400">Cash ({cashPct.toFixed(1)}%)</span>
+            <span className="text-sm text-slate-400">Available Cash ({cashPct.toFixed(1)}%)</span>
             {editingCash ? (
               <div className="flex items-center gap-1.5">
                 <span className="text-slate-500 text-sm">$</span>
@@ -115,7 +138,7 @@ export default function InvestmentDashboard({ investments, cash = 0, onCashUpdat
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-200 tabular-nums">{fmtInv(cash)}</span>
+                <span className="text-sm font-semibold text-slate-200 tabular-nums">{fmtInv(availableCash)}</span>
                 <button onClick={startEdit} className="text-slate-600 hover:text-slate-300 transition-colors"><Pencil size={12} /></button>
               </div>
             )}
@@ -129,12 +152,7 @@ export default function InvestmentDashboard({ investments, cash = 0, onCashUpdat
           <MetricRow label="Win Rate"         value={s.closedCount > 0 ? `${s.winRate.toFixed(1)}%` : '—'} color={s.winRate >= 50 ? 'text-green-400' : 'text-red-400'} />
           <MetricRow label="Avg Win"          value={s.avgWin !== 0 ? fmtInv(s.avgWin) : '—'} color="text-green-400" />
           <MetricRow label="Avg Loss"         value={s.avgLoss !== 0 ? fmtInv(s.avgLoss) : '—'} color="text-red-400" />
-        </MetricGroup>
-
-        <MetricGroup title="Best / Worst" accent="border-t-violet-500" hidden={activeTab !== 2}>
-          <MetricRow label="Best Close"  value={s.bestPosition !== null ? fmtInv(s.bestPosition) : '—'} color="text-green-400" />
-          <MetricRow label="Worst Close" value={s.worstPosition !== null ? fmtInv(s.worstPosition) : '—'} color="text-red-400" />
-          <MetricRow label="Combined P&L" value={fmtInv(s.totalPnL)} color={s.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'} />
+          <MetricRow label="Avg Ann. Return"  value={avgAnnReturn !== null ? `${avgAnnReturn >= 0 ? '+' : ''}${avgAnnReturn.toFixed(1)}%` : '—'} color={avgAnnReturn === null ? 'text-slate-500' : avgAnnReturn >= 0 ? 'text-green-400' : 'text-red-400'} sub="options only" />
         </MetricGroup>
       </div>
     </div>

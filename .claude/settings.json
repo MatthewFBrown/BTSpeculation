@@ -10,7 +10,8 @@
       "Bash(sed \"s/.*['\\\\\"]//g\")",
       "Bash(sed \"s/['\\\\\"]//g\")",
       "Bash(ls .env*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\(Object.keys\\(l\\).filter\\(k => k.toLowerCase\\(\\).includes\\('sheet'\\) || k.toLowerCase\\(\\).includes\\('table'\\) || k.toLowerCase\\(\\).includes\\('grid'\\)\\)\\)\")"
     ],
     "additionalDirectories": [
       "c:\\code\\Github\\BTSpeculation\\docs\\superpowers"

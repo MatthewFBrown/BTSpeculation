@@ -186,6 +186,30 @@ export default function App() {
         setShowInvForm(false);
         setEditInv(null);
     }
+    function handleCloseInv(inv, { sellPrice, sellDate }) {
+        const shares = parseFloat(inv.shares) || 0;
+        const price  = parseFloat(sellPrice) || 0;
+        updateInvestment(inv.id, { status: 'closed', sellPrice, sellDate });
+        handleCashUpdate(cash + shares * price);
+    }
+    function handleRollInv(inv, { buybackPrice, closeDate, newExpiry, newPremium, newStrike }) {
+        updateInvestment(inv.id, {
+            status: 'closed',
+            sellPrice: buybackPrice,
+            sellDate: closeDate,
+        });
+        addInvestment({
+            ...inv,
+            avgCost: newPremium,
+            expiry: newExpiry,
+            strike: newStrike || inv.strike,
+            buyDate: closeDate,
+            status: 'open',
+            currentPrice: '',
+            sellPrice: '',
+            sellDate: '',
+        });
+    }
     function handleDeleteInv(id) {
         const inv = investments.find((i) => i.id === id);
         if (inv?.status === "open") {
@@ -610,15 +634,6 @@ export default function App() {
                                                 : "Refresh Prices"}
                                         </span>
                                     </button>
-                                    <button
-                                        onClick={() => setShowInvForm(true)}
-                                        className="flex items-center gap-1 sm:gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                                    >
-                                        <Plus size={15} />{" "}
-                                        <span className="hidden sm:inline">
-                                            Add Position
-                                        </span>
-                                    </button>
                                 </>
                             )}
                             <button
@@ -717,7 +732,12 @@ export default function App() {
                                 investments={investments}
                                 onDelete={handleDeleteInv}
                                 onEdit={handleEditInv}
+                                onRoll={handleRollInv}
+                                onClosePosition={handleCloseInv}
+                                onAdd={() => setShowInvForm(true)}
                                 onUpdatePrice={handleUpdatePrice}
+                                accountName={activeAccount?.name}
+                                cash={cash}
                             />
                         ) : (
                             <InvestmentCharts investments={investments} />
